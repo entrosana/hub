@@ -1,1 +1,1 @@
-"""entrosana-api -- DLM-backed back-office automation for educational organisations."""
+"""entrosana-ai -- DLM-backed back-office automation for educational organisations."""

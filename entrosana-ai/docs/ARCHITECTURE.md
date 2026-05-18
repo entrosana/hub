@@ -2,7 +2,7 @@
 
 ## One-page summary
 
-entrosana-api is a single FastAPI process organized into 14 capability modules.
+entrosana-ai is a single FastAPI process organized into 14 capability modules.
 Every mutating operation in every module writes through `app/audit/` to a signed
 append-only log.  Anything that calls an LLM goes through `app/dlm/` which pins
 the model version, the prompt version, and the retrieval order.  Sync to the

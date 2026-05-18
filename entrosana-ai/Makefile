@@ -1,4 +1,4 @@
-# entrosana-api developer commands
+# entrosana-ai developer commands
 
 .PHONY: install run lint test fmt migrate dev-up dev-down build clean
 
@@ -36,7 +36,7 @@ dev-down:
 	docker compose -f docker/dev-stack.yml down
 
 build:
-	docker build -t entrosana-api:dev .
+	docker build -t entrosana-ai:dev .
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true

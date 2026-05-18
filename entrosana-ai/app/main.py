@@ -30,7 +30,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="entrosana-api",
+    title="entrosana-ai",
     description="DLM-backed back-office automation for educational organisations.",
     version=settings.api_version,
     docs_url="/docs" if settings.environment != "production" else None,
@@ -50,7 +50,7 @@ app.add_middleware(
 @app.get("/health", tags=["meta"])
 async def health():
     """Liveness probe -- used by Docker HEALTHCHECK + load balancer."""
-    return {"status": "ok", "service": "entrosana-api", "version": settings.api_version}
+    return {"status": "ok", "service": "entrosana-ai", "version": settings.api_version}
 
 
 # Mount module routers under /api/v1

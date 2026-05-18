@@ -1,4 +1,4 @@
-# entrosana-api CI
+# entrosana-ai CI
 #
 # Stages: lint -> test -> build.  All jobs target GitLab.com shared runners
 # until a self-hosted runner is wired (which won't be soon -- the EC2 is

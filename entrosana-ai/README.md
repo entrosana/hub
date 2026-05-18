@@ -1,4 +1,4 @@
-# entrosana-api
+# entrosana-ai
 
 > Audit-grade AI for back-office work.  Swiss-hosted, deterministic, built on CashCtrl.
 
@@ -64,8 +64,8 @@ Capability modules:
 
 ```bash
 # Prereqs: Python 3.12, uv (or pip), Docker, PostgreSQL
-git clone https://gitlab.com/Giansn/entrosana-api.git
-cd entrosana-api
+git clone https://gitlab.com/Giansn/entrosana-ai.git
+cd entrosana-ai
 
 # Install deps
 uv sync                       # or: pip install -e ".[dev]"

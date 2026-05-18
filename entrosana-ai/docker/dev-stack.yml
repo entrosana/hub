@@ -1,4 +1,4 @@
-# Local dev stack.  Postgres + Redis.  Brings entrosana-api up locally without
+# Local dev stack.  Postgres + Redis.  Brings entrosana-ai up locally without
 # requiring docker-compose for the API itself (uvicorn --reload is faster).
 
 services:

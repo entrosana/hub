@@ -1,5 +1,5 @@
 [project]
-name = "entrosana-api"
+name = "entrosana-ai"
 version = "0.0.1"
 description = "Audit-grade AI for back-office work.  DLM-based.  Built on CashCtrl."
 readme = "README.md"

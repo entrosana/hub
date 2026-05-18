@@ -41,7 +41,7 @@ class Settings(BaseSettings):
 
     # Observability
     otel_exporter_otlp_endpoint: str = ""
-    otel_service_name: str = "entrosana-api"
+    otel_service_name: str = "entrosana-ai"
 
 
 @lru_cache

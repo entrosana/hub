@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to entrosana-api will be documented here.  Keep-a-changelog
+All notable changes to entrosana-ai will be documented here.  Keep-a-changelog
 format.  Semantic versioning.
 
 ## [0.0.1] - 2026-05-18
