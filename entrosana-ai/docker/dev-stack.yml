@@ -1,0 +1,26 @@
+# Local dev stack.  Postgres + Redis.  Brings entrosana-api up locally without
+# requiring docker-compose for the API itself (uvicorn --reload is faster).
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: entrosana-postgres
+    environment:
+      POSTGRES_DB: entrosana
+      POSTGRES_USER: entrosana
+      POSTGRES_PASSWORD: devpass
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U entrosana"]
+      interval: 5s
+
+  redis:
+    image: redis:7-alpine
+    container_name: entrosana-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./data/redis:/data
