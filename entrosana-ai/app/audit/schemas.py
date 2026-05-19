@@ -1,11 +1,15 @@
 """Pydantic schemas for audit endpoints."""
 from datetime import datetime
-from pydantic import BaseModel
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict
 
 
 class AuditEventOut(BaseModel):
-    id: int
-    tenant_id: str
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    tenant_id: UUID
     actor_id: str
     action: str
     target_type: str
@@ -18,4 +22,4 @@ class AuditEventOut(BaseModel):
 class ChainVerificationResult(BaseModel):
     ok: bool
     events_checked: int
-    first_bad_event_id: int | None = None
+    first_bad_event_id: UUID | None = None

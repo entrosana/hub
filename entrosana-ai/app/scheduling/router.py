@@ -1,31 +1,46 @@
 """FastAPI routes for scheduling."""
+from datetime import datetime
+from uuid import UUID
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.scheduling import repository, service
-from app.scheduling.schemas import ScheduleIn, ScheduleOut
+from app.core.crud import list_for_tenant
 from app.core.dependencies import get_db, get_tenant_id
+from app.scheduling import repository, service
+from app.scheduling.models import Schedule
+from app.scheduling.schemas import ScheduleIn, ScheduleOut
 
 router = APIRouter(prefix="/scheduling", tags=["scheduling"])
 
 
-@router.get("/", response_model=list[ScheduleOut])
-async def list_(
+@router.get("/schedules", response_model=list[ScheduleOut])
+async def list_schedules(
+    start: datetime | None = None,
+    end: datetime | None = None,
     limit: int = 50,
-    tenant_id: str = Depends(get_tenant_id),
+    tenant_id: UUID = Depends(get_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
-    return await repository.list_all(db, tenant_id, limit=limit)
+    if start and end:
+        return await repository.list_in_window(db, tenant_id, start, end)
+    return await list_for_tenant(db, Schedule, tenant_id, limit=limit)
 
 
-@router.post("/", response_model=ScheduleOut, status_code=201)
-async def create(
+@router.post("/schedules", response_model=ScheduleOut, status_code=201)
+async def create_schedule(
     payload: ScheduleIn,
-    tenant_id: str = Depends(get_tenant_id),
+    tenant_id: UUID = Depends(get_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
-    obj = await service.create_schedule(
-        db, tenant_id=tenant_id, actor_id="system", name=payload.name,
+    schedule = await service.create_schedule(
+        db,
+        tenant_id=tenant_id,
+        actor_id="system",
+        title=payload.title,
+        starts_at=payload.starts_at,
+        ends_at=payload.ends_at,
+        room=payload.room,
     )
     await db.commit()
-    return obj
+    return schedule

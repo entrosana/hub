@@ -1,14 +1,14 @@
-"""ORM models for signup."""
-from datetime import datetime
-from sqlalchemy import String, DateTime, Integer
+"""ORM models for signup (student enrolment flow)."""
+from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column
-from app.core.database import Base
+
+from app.core.base import TenantBase
 
 
-class Application(Base):
+class Application(TenantBase):
     __tablename__ = "signup_applications"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[str] = mapped_column(String(64), index=True)
-    name: Mapped[str] = mapped_column(String(256))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    student_name: Mapped[str] = mapped_column(String(256))
+    parent_name: Mapped[str] = mapped_column(String(256))
+    parent_email: Mapped[str] = mapped_column(String(320), index=True)
+    status: Mapped[str] = mapped_column(String(32), default="received", index=True)

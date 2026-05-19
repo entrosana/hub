@@ -1,31 +1,43 @@
 """FastAPI routes for taxes."""
+from uuid import UUID
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.taxes import repository, service
-from app.taxes.schemas import FilingIn, FilingOut
+from app.core.crud import list_for_tenant
 from app.core.dependencies import get_db, get_tenant_id
+from app.taxes import repository, service
+from app.taxes.models import Filing
+from app.taxes.schemas import FilingIn, FilingOut
 
 router = APIRouter(prefix="/taxes", tags=["taxes"])
 
 
-@router.get("/", response_model=list[FilingOut])
-async def list_(
+@router.get("/filings", response_model=list[FilingOut])
+async def list_filings(
+    year: int | None = None,
     limit: int = 50,
-    tenant_id: str = Depends(get_tenant_id),
+    tenant_id: UUID = Depends(get_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
-    return await repository.list_all(db, tenant_id, limit=limit)
+    if year is not None:
+        return await repository.list_by_year(db, tenant_id, year)
+    return await list_for_tenant(db, Filing, tenant_id, limit=limit)
 
 
-@router.post("/", response_model=FilingOut, status_code=201)
-async def create(
+@router.post("/filings", response_model=FilingOut, status_code=201)
+async def draft_filing(
     payload: FilingIn,
-    tenant_id: str = Depends(get_tenant_id),
+    tenant_id: UUID = Depends(get_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
-    obj = await service.create_filing(
-        db, tenant_id=tenant_id, actor_id="system", name=payload.name,
+    filing = await service.draft_filing(
+        db,
+        tenant_id=tenant_id,
+        actor_id="system",
+        kind=payload.kind,
+        period_year=payload.period_year,
+        period_month=payload.period_month,
     )
     await db.commit()
-    return obj
+    return filing

@@ -1,14 +1,26 @@
 """Pydantic schemas for contracts."""
 from datetime import datetime
-from pydantic import BaseModel
+from typing import Literal
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict
+
+
+ContractStatus = Literal["draft", "sent", "signed", "void"]
 
 
 class ContractIn(BaseModel):
-    name: str
+    title: str
+    template_version: str
 
 
 class ContractOut(BaseModel):
-    id: int
-    tenant_id: str
-    name: str
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    tenant_id: UUID
+    title: str
+    template_version: str
+    status: str
+    signed_at: datetime | None
     created_at: datetime

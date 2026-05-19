@@ -1,31 +1,45 @@
 """FastAPI routes for addresses."""
+from uuid import UUID
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.addresses import repository, service
+from app.addresses.models import Address
 from app.addresses.schemas import AddressIn, AddressOut
+from app.core.crud import list_for_tenant
 from app.core.dependencies import get_db, get_tenant_id
 
 router = APIRouter(prefix="/addresses", tags=["addresses"])
 
 
 @router.get("/", response_model=list[AddressOut])
-async def list_(
+async def list_addresses(
+    postcode: str | None = None,
     limit: int = 50,
-    tenant_id: str = Depends(get_tenant_id),
+    tenant_id: UUID = Depends(get_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
-    return await repository.list_all(db, tenant_id, limit=limit)
+    if postcode:
+        return await repository.find_by_postcode(db, tenant_id, postcode)
+    return await list_for_tenant(db, Address, tenant_id, limit=limit)
 
 
 @router.post("/", response_model=AddressOut, status_code=201)
-async def create(
+async def register_address(
     payload: AddressIn,
-    tenant_id: str = Depends(get_tenant_id),
+    tenant_id: UUID = Depends(get_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
-    obj = await service.create_address(
-        db, tenant_id=tenant_id, actor_id="system", name=payload.name,
+    address = await service.register_address(
+        db,
+        tenant_id=tenant_id,
+        actor_id="system",
+        line1=payload.line1,
+        line2=payload.line2,
+        postcode=payload.postcode,
+        city=payload.city,
+        country=payload.country,
     )
     await db.commit()
-    return obj
+    return address

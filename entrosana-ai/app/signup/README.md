@@ -1,15 +1,23 @@
 # signup/
 
-Student enrollment flow (parent applies, school approves).
+Student enrolment flow: parent submits a public application → school
+admits → contracts get drafted automatically → bills get scheduled.
+
+This module is the only one with a **public** endpoint family. Once
+admitted, the application becomes a `Person(kind='student')` in
+`app/admin` and a draft contract in `app/contracts`.
 
 ## Tables
 
-- `signup_applications` — main entity (stub; flesh out per requirements)
+- `signup_applications` — `status ∈ {received, reviewing, admitted, rejected}`
 
 ## Endpoints
 
-`/api/v1/signup/...` — see `router.py`.
+- `GET  /api/v1/signup/applications` — staff queue
+- `POST /api/v1/signup/applications` — public submission (rate-limited)
 
-## DLM usage
+## Planned
 
-(none yet — fill in when AI-mediated flows are added)
+- Public form rate-limiting (per IP + per email) ahead of admin queue
+- On `admitted`: create Person + draft contract + open billing schedule
+- Email notifications via `app/documents` template rendering pipeline

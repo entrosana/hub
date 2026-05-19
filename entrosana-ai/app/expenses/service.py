@@ -1,19 +1,42 @@
-"""Business logic for expenses.  All mutations go through audit.record()."""
+"""Business logic for expenses. All mutations route through audit.record()."""
+from uuid import UUID
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.expenses import repository
 from app.audit import service as audit
+from app.core.crud import create_for_tenant
+from app.expenses.models import Expense
 
 
-async def create_expense(db: AsyncSession, *, tenant_id: str, actor_id: str, name: str):
-    obj = await repository.create(db, tenant_id=tenant_id, name=name)
+async def submit_expense(
+    db: AsyncSession,
+    *,
+    tenant_id: UUID,
+    actor_id: str,
+    description: str,
+    amount_cents: int,
+    currency: str = "CHF",
+    receipt_document_id: str | None = None,
+) -> Expense:
+    expense = await create_for_tenant(
+        db, Expense, tenant_id,
+        description=description,
+        amount_cents=amount_cents,
+        currency=currency,
+        receipt_document_id=receipt_document_id,
+    )
     await audit.record(
         db,
         tenant_id=tenant_id,
         actor_id=actor_id,
-        action="expenses.expense.create",
+        action="expenses.expense.submit",
         target_type="expense",
-        target_id=str(obj.id),
-        after={"name": name},
+        target_id=str(expense.id),
+        after={
+            "description": description,
+            "amount_cents": amount_cents,
+            "currency": currency,
+            "receipt_document_id": receipt_document_id,
+        },
     )
-    return obj
+    return expense

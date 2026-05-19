@@ -1,14 +1,14 @@
-"""ORM models for accounting."""
-from datetime import datetime
-from sqlalchemy import String, DateTime, Integer
+"""ORM models for accounting (GL entries, booking proposals)."""
+from sqlalchemy import Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
-from app.core.database import Base
+
+from app.core.base import TenantBase
 
 
-class Entry(Base):
-    __tablename__ = "accounting_entrys"
+class Entry(TenantBase):
+    __tablename__ = "accounting_entries"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[str] = mapped_column(String(64), index=True)
-    name: Mapped[str] = mapped_column(String(256))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    description: Mapped[str] = mapped_column(String(512))
+    amount_cents: Mapped[int] = mapped_column(Integer)
+    currency: Mapped[str] = mapped_column(String(3), default="CHF")
+    status: Mapped[str] = mapped_column(String(32), default="proposed", index=True)

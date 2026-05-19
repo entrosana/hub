@@ -1,14 +1,23 @@
 """Pydantic schemas for signup."""
 from datetime import datetime
-from pydantic import BaseModel
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, EmailStr
 
 
 class ApplicationIn(BaseModel):
-    name: str
+    student_name: str
+    parent_name: str
+    parent_email: EmailStr
 
 
 class ApplicationOut(BaseModel):
-    id: int
-    tenant_id: str
-    name: str
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    tenant_id: UUID
+    student_name: str
+    parent_name: str
+    parent_email: str
+    status: str
     created_at: datetime

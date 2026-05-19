@@ -1,15 +1,23 @@
 # addresses/
 
-Swiss postal address validation, geocoding.
+Swiss postal address validation + geocoding.
+
+A dedicated module so other modules (`admin`, `billing`, `signup`)
+can reference normalised addresses by id rather than denormalising
+street/postcode/city into every row that needs them.
 
 ## Tables
 
-- `addresses_addresss` — main entity (stub; flesh out per requirements)
+- `addresses_records` — line1/line2, postcode, city, country (ISO2),
+  optional lat/lon
 
 ## Endpoints
 
-`/api/v1/addresses/...` — see `router.py`.
+- `GET  /api/v1/addresses/?postcode=8001` — lookup by postcode
+- `POST /api/v1/addresses/` — register a new address
 
-## DLM usage
+## Planned
 
-(none yet — fill in when AI-mediated flows are added)
+- Validate against the SwissPost MAT[CH] address dataset on POST
+- Geocode via swisstopo / Google as a Celery side-job after insert
+- Soft-dedupe on `(postcode, line1)` per tenant

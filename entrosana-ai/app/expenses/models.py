@@ -1,14 +1,15 @@
-"""ORM models for expenses."""
-from datetime import datetime
-from sqlalchemy import String, DateTime, Integer
+"""ORM models for expenses (submission, approval, reimbursement)."""
+from sqlalchemy import Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
-from app.core.database import Base
+
+from app.core.base import TenantBase
 
 
-class Expense(Base):
+class Expense(TenantBase):
     __tablename__ = "expenses_expenses"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[str] = mapped_column(String(64), index=True)
-    name: Mapped[str] = mapped_column(String(256))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    description: Mapped[str] = mapped_column(String(512))
+    amount_cents: Mapped[int] = mapped_column(Integer)
+    currency: Mapped[str] = mapped_column(String(3), default="CHF")
+    status: Mapped[str] = mapped_column(String(32), default="submitted", index=True)
+    receipt_document_id: Mapped[str | None] = mapped_column(String(64), nullable=True)

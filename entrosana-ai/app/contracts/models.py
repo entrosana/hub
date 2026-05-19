@@ -1,14 +1,18 @@
-"""ORM models for contracts."""
+"""ORM models for contracts (templates, signing flow, versioning)."""
 from datetime import datetime
-from sqlalchemy import String, DateTime, Integer
+
+from sqlalchemy import DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column
-from app.core.database import Base
+
+from app.core.base import TenantBase
 
 
-class Contract(Base):
+class Contract(TenantBase):
     __tablename__ = "contracts_contracts"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[str] = mapped_column(String(64), index=True)
-    name: Mapped[str] = mapped_column(String(256))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    title: Mapped[str] = mapped_column(String(256))
+    template_version: Mapped[str] = mapped_column(String(32))
+    status: Mapped[str] = mapped_column(String(32), default="draft", index=True)
+    signed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )

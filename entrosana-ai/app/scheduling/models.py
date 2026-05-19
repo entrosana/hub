@@ -1,14 +1,16 @@
-"""ORM models for scheduling."""
+"""ORM models for scheduling (class schedules, substitute matching)."""
 from datetime import datetime
-from sqlalchemy import String, DateTime, Integer
+
+from sqlalchemy import DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column
-from app.core.database import Base
+
+from app.core.base import TenantBase
 
 
-class Schedule(Base):
+class Schedule(TenantBase):
     __tablename__ = "scheduling_schedules"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[str] = mapped_column(String(64), index=True)
-    name: Mapped[str] = mapped_column(String(256))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    title: Mapped[str] = mapped_column(String(256))
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    room: Mapped[str | None] = mapped_column(String(64), nullable=True)

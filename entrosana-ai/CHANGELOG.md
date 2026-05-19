@@ -3,6 +3,44 @@
 All notable changes to entrosana-ai will be documented here.  Keep-a-changelog
 format.  Semantic versioning.
 
+## [Unreleased]
+
+### Changed
+
+- All domain models now inherit from `app.core.base.TenantBase` (UUID PK,
+  indexed UUID `tenant_id`, `created_at`/`updated_at` timestamps). Per-module
+  models dropped ~6 lines of boilerplate each and gained `updated_at`.
+- Per-module repositories now compose `app.core.crud.list_for_tenant` +
+  `create_for_tenant` + `get_for_tenant`; each module's `repository.py` only
+  holds domain-specific queries (e.g. `list_overdue`, `find_by_postcode`,
+  `list_by_kind`).
+- Endpoint URLs now reflect resource names (e.g. `/identity/users`,
+  `/accounting/entries`, `/admin/persons`) rather than `/identity/`.
+- Module models carry domain-specific columns instead of the stub
+  `name: str` placeholder (e.g. `accounting.Entry` has `amount_cents`,
+  `currency`, `status`; `documents.Document` has `filename`, `mime_type`,
+  `storage_uri`).
+- `audit.AuditEvent` + `audit.DLMInteraction` migrated to TenantBase; chain
+  verify now returns `(ok, n_events, first_bad_event_id: UUID | None)`.
+- `app.core.dependencies.get_tenant_id` validates the `X-Tenant-Id` header
+  as a UUID instead of an opaque string.
+- Identity creation now optionally hashes a password through
+  `app.core.security.hash_password` (bcrypt); the password hash is
+  intentionally excluded from the audit `after` payload.
+
+### Fixed
+
+- `accounting_entrys` table-name typo → `accounting_entries`.
+- `addresses_addresss` table-name typo → `addresses_records`.
+
+### Added
+
+- `app/core/crud.py` — shared tenant-scoped CRUD helpers.
+- Real audit-chain tests (`tests/test_audit_chain.py`): verify-intact,
+  tamper-detect, tenant-isolation, GENESIS-anchor.
+- `aiosqlite` dev dep + in-memory `db`/`client` fixtures in
+  `tests/conftest.py`.
+
 ## [0.0.1] - 2026-05-18
 
 ### Added

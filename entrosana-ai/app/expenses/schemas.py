@@ -1,14 +1,25 @@
 """Pydantic schemas for expenses."""
 from datetime import datetime
-from pydantic import BaseModel
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict
 
 
 class ExpenseIn(BaseModel):
-    name: str
+    description: str
+    amount_cents: int
+    currency: str = "CHF"
+    receipt_document_id: str | None = None
 
 
 class ExpenseOut(BaseModel):
-    id: int
-    tenant_id: str
-    name: str
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    tenant_id: UUID
+    description: str
+    amount_cents: int
+    currency: str
+    status: str
+    receipt_document_id: str | None
     created_at: datetime

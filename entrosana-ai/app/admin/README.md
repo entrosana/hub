@@ -1,15 +1,21 @@
 # admin/
 
-Students, parents, staff, organisational hierarchy.
+Students, parents, staff and the organisational hierarchy that
+binds them. Person rows here are the human-readable subjects of
+contracts (`app/contracts`), billing (`app/billing`) and
+enrolment (`app/signup`).
 
 ## Tables
 
-- `admin_persons` — main entity (stub; flesh out per requirements)
+- `admin_persons` — `kind ∈ {student, parent, staff}`, name, email
 
 ## Endpoints
 
-`/api/v1/admin/...` — see `router.py`.
+- `GET  /api/v1/admin/persons?kind=student` — list students/parents/staff
+- `POST /api/v1/admin/persons` — register a person
 
-## DLM usage
+## Planned
 
-(none yet — fill in when AI-mediated flows are added)
+- `Class` + `Enrolment` tables for the student → class graph
+- Parent ↔ student relationships (a single parent can hold several
+  child rows); this graph drives sibling-discount logic in `billing/`

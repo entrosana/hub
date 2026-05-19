@@ -32,3 +32,11 @@ docker/data/
 
 # uv
 .python-version
+
+# Frontend scaffolding (preempt — we may add a UI later)
+node_modules/
+.next/
+.parcel-cache/
+
+# Alembic local artefacts
+migrations/versions/*.pyc
