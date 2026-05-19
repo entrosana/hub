@@ -1,10 +1,10 @@
 """Pydantic schemas for admin."""
+
 from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr
-
 
 PersonKind = Literal["student", "parent", "staff"]
 

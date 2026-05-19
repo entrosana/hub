@@ -1,4 +1,5 @@
 """ORM models for billing (family-based invoicing, sibling discounts)."""
+
 from datetime import date, datetime
 
 from sqlalchemy import Date, DateTime, Integer, String
@@ -17,6 +18,4 @@ class Invoice(TenantBase):
     issued_on: Mapped[date] = mapped_column(Date)
     due_on: Mapped[date] = mapped_column(Date)
     status: Mapped[str] = mapped_column(String(32), default="open", index=True)
-    paid_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -4,9 +4,11 @@ Generic CRUD lives in `app.core.crud` (list_for_tenant, create_for_tenant,
 get_for_tenant). Add identity-specific queries (lookup by email, role joins)
 to this file as the domain grows.
 """
+
+from uuid import UUID
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from uuid import UUID
 
 from app.identity.models import User
 

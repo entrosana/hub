@@ -1,4 +1,5 @@
 """ORM models for accounting (GL entries, booking proposals)."""
+
 from sqlalchemy import Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 

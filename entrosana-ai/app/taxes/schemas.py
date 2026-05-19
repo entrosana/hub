@@ -1,14 +1,14 @@
 """Pydantic schemas for taxes."""
+
 from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
-
 FilingKind = Literal[
-    "source_tax",   # Quellensteuer
-    "ahv_iv",       # AHV / IV / EO
+    "source_tax",  # Quellensteuer
+    "ahv_iv",  # AHV / IV / EO
     "payroll_tax",
     "year_end",
 ]

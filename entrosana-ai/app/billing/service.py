@@ -1,4 +1,5 @@
 """Business logic for billing. All mutations route through audit.record()."""
+
 from datetime import date
 from uuid import UUID
 
@@ -22,10 +23,15 @@ async def issue_invoice(
     due_on: date,
 ) -> Invoice:
     invoice = await create_for_tenant(
-        db, Invoice, tenant_id,
-        number=number, family_id=family_id,
-        amount_cents=amount_cents, currency=currency,
-        issued_on=issued_on, due_on=due_on,
+        db,
+        Invoice,
+        tenant_id,
+        number=number,
+        family_id=family_id,
+        amount_cents=amount_cents,
+        currency=currency,
+        issued_on=issued_on,
+        due_on=due_on,
     )
     await audit.record(
         db,

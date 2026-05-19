@@ -3,6 +3,7 @@
 Generic CRUD lives in `app.core.crud`. Add admin-specific queries
 (filter by kind, parent-of-student joins) here as needed.
 """
+
 from uuid import UUID
 
 from sqlalchemy import select

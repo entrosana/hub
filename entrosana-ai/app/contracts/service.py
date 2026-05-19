@@ -1,4 +1,5 @@
 """Business logic for contracts. All mutations route through audit.record()."""
+
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession

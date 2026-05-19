@@ -1,4 +1,5 @@
 """FastAPI routes for documents."""
+
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
@@ -21,9 +22,7 @@ async def list_documents(
     db: AsyncSession = Depends(get_db),
 ):
     if classification:
-        return await repository.list_by_classification(
-            db, tenant_id, classification, limit=limit
-        )
+        return await repository.list_by_classification(db, tenant_id, classification, limit=limit)
     return await list_for_tenant(db, Document, tenant_id, limit=limit)
 
 

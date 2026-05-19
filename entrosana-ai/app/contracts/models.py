@@ -1,4 +1,5 @@
 """ORM models for contracts (templates, signing flow, versioning)."""
+
 from datetime import datetime
 
 from sqlalchemy import DateTime, String
@@ -13,6 +14,4 @@ class Contract(TenantBase):
     title: Mapped[str] = mapped_column(String(256))
     template_version: Mapped[str] = mapped_column(String(32))
     status: Mapped[str] = mapped_column(String(32), default="draft", index=True)
-    signed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

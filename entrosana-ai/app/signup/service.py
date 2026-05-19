@@ -1,4 +1,5 @@
 """Business logic for signup. All mutations route through audit.record()."""
+
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,7 +19,9 @@ async def submit_application(
     parent_email: str,
 ) -> Application:
     application = await create_for_tenant(
-        db, Application, tenant_id,
+        db,
+        Application,
+        tenant_id,
         student_name=student_name,
         parent_name=parent_name,
         parent_email=parent_email,

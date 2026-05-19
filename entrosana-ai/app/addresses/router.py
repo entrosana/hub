@@ -1,4 +1,5 @@
 """FastAPI routes for addresses."""
+
 from uuid import UUID
 
 from fastapi import APIRouter, Depends

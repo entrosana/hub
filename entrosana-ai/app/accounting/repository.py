@@ -3,6 +3,7 @@
 Generic CRUD lives in `app.core.crud`. Add domain-specific queries
 here (filter by status, sum by period, reconcile against CashCtrl).
 """
+
 from uuid import UUID
 
 from sqlalchemy import select

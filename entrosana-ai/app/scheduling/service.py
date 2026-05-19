@@ -1,4 +1,5 @@
 """Business logic for scheduling. All mutations route through audit.record()."""
+
 from datetime import datetime
 from uuid import UUID
 
@@ -20,8 +21,13 @@ async def create_schedule(
     room: str | None = None,
 ) -> Schedule:
     schedule = await create_for_tenant(
-        db, Schedule, tenant_id,
-        title=title, starts_at=starts_at, ends_at=ends_at, room=room,
+        db,
+        Schedule,
+        tenant_id,
+        title=title,
+        starts_at=starts_at,
+        ends_at=ends_at,
+        room=room,
     )
     await audit.record(
         db,

@@ -1,4 +1,5 @@
 """Password hashing.  bcrypt via passlib."""
+
 from passlib.context import CryptContext
 
 _pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")

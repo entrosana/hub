@@ -1,4 +1,5 @@
 """Business logic for documents. All mutations route through audit.record()."""
+
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,9 +22,13 @@ async def register_document(
     """Persist a document row. The actual upload to object storage
     happens upstream; this service just records the metadata pointer."""
     document = await create_for_tenant(
-        db, Document, tenant_id,
-        filename=filename, mime_type=mime_type,
-        storage_uri=storage_uri, size_bytes=size_bytes,
+        db,
+        Document,
+        tenant_id,
+        filename=filename,
+        mime_type=mime_type,
+        storage_uri=storage_uri,
+        size_bytes=size_bytes,
     )
     await audit.record(
         db,

@@ -3,6 +3,7 @@
 Generic CRUD lives in `app.core.crud`. Add document-specific queries
 (by classification, awaiting OCR, by content hash) here.
 """
+
 from uuid import UUID
 
 from sqlalchemy import select

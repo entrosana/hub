@@ -5,6 +5,7 @@ from `Base.metadata`. The `db` fixture yields an `AsyncSession`; the
 `client` fixture yields an httpx test client wired against the same
 session via FastAPI dependency override.
 """
+
 import os
 
 # Force the test environment BEFORE any app module imports settings.
@@ -21,10 +22,11 @@ from sqlalchemy.ext.asyncio import (  # noqa: E402
     create_async_engine,
 )
 
+from app.core.database import Base, get_session  # noqa: E402
+
 # Importing app.main triggers SQLAlchemy mapper configuration, which is
 # what we need for Base.metadata to see every table.
 from app.main import app  # noqa: E402,F401
-from app.core.database import Base, get_session  # noqa: E402
 
 
 @pytest.fixture
@@ -32,9 +34,7 @@ async def db():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    session_factory = async_sessionmaker(
-        engine, expire_on_commit=False, class_=AsyncSession
-    )
+    session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     async with session_factory() as session:
         yield session
     await engine.dispose()

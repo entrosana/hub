@@ -3,6 +3,7 @@
 Generic CRUD lives in `app.core.crud`. Add signup-specific queries
 (by parent email, applications awaiting review) here.
 """
+
 from uuid import UUID
 
 from sqlalchemy import select
@@ -11,9 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.signup.models import Application
 
 
-async def find_by_parent_email(
-    db: AsyncSession, tenant_id: UUID, email: str
-) -> list[Application]:
+async def find_by_parent_email(db: AsyncSession, tenant_id: UUID, email: str) -> list[Application]:
     q = (
         select(Application)
         .where(

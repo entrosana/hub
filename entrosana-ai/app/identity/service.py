@@ -1,4 +1,5 @@
 """Business logic for identity. All mutations route through audit.record()."""
+
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,8 +21,12 @@ async def create_user(
 ) -> User:
     password_hash = hash_password(password) if password else None
     user = await create_for_tenant(
-        db, User, tenant_id,
-        name=name, email=email, password_hash=password_hash,
+        db,
+        User,
+        tenant_id,
+        name=name,
+        email=email,
+        password_hash=password_hash,
     )
     await audit.record(
         db,

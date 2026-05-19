@@ -9,6 +9,7 @@ repository.py MUST filter by tenant_id so cross-tenant reads are impossible.
 The `sqlalchemy.Uuid` column type adapts per dialect (native uuid on
 Postgres, char(32) on SQLite) so the in-memory test database works too.
 """
+
 from datetime import datetime
 from uuid import UUID, uuid4
 

@@ -1,4 +1,5 @@
 """Audit query endpoints. Read-only — recording happens via service module."""
+
 from uuid import UUID
 
 from fastapi import APIRouter, Depends

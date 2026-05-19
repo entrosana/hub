@@ -1,4 +1,5 @@
 """Pydantic schemas for scheduling."""
+
 from datetime import datetime
 from uuid import UUID
 

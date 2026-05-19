@@ -1,4 +1,5 @@
 """Pydantic schemas for audit endpoints."""
+
 from datetime import datetime
 from uuid import UUID
 

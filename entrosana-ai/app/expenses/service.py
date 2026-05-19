@@ -1,4 +1,5 @@
 """Business logic for expenses. All mutations route through audit.record()."""
+
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +20,9 @@ async def submit_expense(
     receipt_document_id: str | None = None,
 ) -> Expense:
     expense = await create_for_tenant(
-        db, Expense, tenant_id,
+        db,
+        Expense,
+        tenant_id,
         description=description,
         amount_cents=amount_cents,
         currency=currency,

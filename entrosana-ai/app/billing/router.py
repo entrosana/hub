@@ -1,4 +1,5 @@
 """FastAPI routes for billing."""
+
 from datetime import date
 from uuid import UUID
 

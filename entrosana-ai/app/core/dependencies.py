@@ -1,4 +1,5 @@
 """FastAPI dependencies shared across routers."""
+
 from uuid import UUID
 
 from fastapi import Depends, Header, HTTPException

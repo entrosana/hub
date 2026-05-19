@@ -1,4 +1,5 @@
 """Business logic for addresses. All mutations route through audit.record()."""
+
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,9 +21,14 @@ async def register_address(
     country: str = "CH",
 ) -> Address:
     address = await create_for_tenant(
-        db, Address, tenant_id,
-        line1=line1, line2=line2,
-        postcode=postcode, city=city, country=country,
+        db,
+        Address,
+        tenant_id,
+        line1=line1,
+        line2=line2,
+        postcode=postcode,
+        city=city,
+        country=country,
     )
     await audit.record(
         db,

@@ -3,6 +3,7 @@
 The chain links every signed mutation per tenant. If a row's `hmac` is
 altered, verification must fail at that exact row.
 """
+
 from uuid import uuid4
 
 from app.audit import service as audit

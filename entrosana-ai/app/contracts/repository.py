@@ -3,6 +3,7 @@
 Generic CRUD lives in `app.core.crud`. Add contract-specific queries
 (awaiting signature, expiring soon, by template version) here.
 """
+
 from uuid import UUID
 
 from sqlalchemy import select

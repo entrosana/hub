@@ -1,4 +1,5 @@
 """ORM models for scheduling (class schedules, substitute matching)."""
+
 from datetime import datetime
 
 from sqlalchemy import DateTime, String

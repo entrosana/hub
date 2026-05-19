@@ -3,6 +3,7 @@
 Generic CRUD lives in `app.core.crud`. Add invoice-specific queries
 (overdue, per-family open balance, reconciliation against CashCtrl) here.
 """
+
 from datetime import date
 from uuid import UUID
 
@@ -29,9 +30,7 @@ async def list_overdue(
     return list(result.scalars())
 
 
-async def list_for_family(
-    db: AsyncSession, tenant_id: UUID, family_id: str
-) -> list[Invoice]:
+async def list_for_family(db: AsyncSession, tenant_id: UUID, family_id: str) -> list[Invoice]:
     q = (
         select(Invoice)
         .where(Invoice.tenant_id == tenant_id, Invoice.family_id == family_id)

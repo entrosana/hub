@@ -3,6 +3,7 @@
 Generic CRUD lives in `app.core.crud`. Add date-window queries
 (today's classes, conflicts, substitute candidates) here.
 """
+
 from datetime import datetime
 from uuid import UUID
 

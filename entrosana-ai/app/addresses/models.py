@@ -1,4 +1,5 @@
 """ORM models for addresses (Swiss postal validation + geocoding)."""
+
 from sqlalchemy import Float, String
 from sqlalchemy.orm import Mapped, mapped_column
 

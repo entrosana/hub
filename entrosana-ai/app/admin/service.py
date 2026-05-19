@@ -1,4 +1,5 @@
 """Business logic for admin. All mutations route through audit.record()."""
+
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,9 +18,7 @@ async def create_person(
     kind: str,
     email: str | None = None,
 ) -> Person:
-    person = await create_for_tenant(
-        db, Person, tenant_id, name=name, kind=kind, email=email
-    )
+    person = await create_for_tenant(db, Person, tenant_id, name=name, kind=kind, email=email)
     await audit.record(
         db,
         tenant_id=tenant_id,

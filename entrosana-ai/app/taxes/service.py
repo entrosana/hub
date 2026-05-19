@@ -1,4 +1,5 @@
 """Business logic for taxes. All mutations route through audit.record()."""
+
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,8 +19,12 @@ async def draft_filing(
     period_month: int | None = None,
 ) -> Filing:
     filing = await create_for_tenant(
-        db, Filing, tenant_id,
-        kind=kind, period_year=period_year, period_month=period_month,
+        db,
+        Filing,
+        tenant_id,
+        kind=kind,
+        period_year=period_year,
+        period_month=period_month,
     )
     await audit.record(
         db,

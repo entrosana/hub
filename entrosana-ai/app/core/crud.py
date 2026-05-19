@@ -4,7 +4,7 @@ Every module's repository.py uses these helpers so the per-domain code stays
 focused on what's actually domain-specific. Tenant isolation is enforced
 here in exactly one place.
 """
-from typing import TypeVar
+
 from uuid import UUID
 
 from sqlalchemy import select
@@ -12,10 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.base import TenantBase
 
-T = TypeVar("T", bound=TenantBase)
 
-
-async def list_for_tenant(
+async def list_for_tenant[T: TenantBase](
     db: AsyncSession,
     model: type[T],
     tenant_id: UUID,
@@ -34,7 +32,7 @@ async def list_for_tenant(
     return list(result.scalars())
 
 
-async def create_for_tenant(
+async def create_for_tenant[T: TenantBase](
     db: AsyncSession,
     model: type[T],
     tenant_id: UUID,
@@ -46,7 +44,7 @@ async def create_for_tenant(
     return obj
 
 
-async def get_for_tenant(
+async def get_for_tenant[T: TenantBase](
     db: AsyncSession,
     model: type[T],
     tenant_id: UUID,
