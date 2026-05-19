@@ -33,12 +33,12 @@ dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
     "pytest-cov>=6.0",
-    "aiosqlite>=0.20",
     "httpx>=0.28",
     "ruff>=0.8",
     "mypy>=1.13",
     "types-python-jose",
     "factory-boy>=3.3",
+    "aiosqlite>=0.22",   # in-memory SQLite for audit-chain roundtrip tests
 ]
 
 [build-system]
@@ -54,8 +54,14 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "B", "UP", "S", "ASYNC"]
-ignore = ["E501", "S101"]   # line length covered by ruff format; allow asserts in tests
+# E501 → line length covered by `ruff format`
+# S101 → allow `assert` in tests
+# B008 → false-positive on FastAPI `Depends(...)` argument defaults (the canonical pattern)
+# UP042 → `class X(str, Enum)` is the compact-dataclass style used in the DLM core; equivalent to StrEnum
+# S603/S607 → subprocess with literal `git` argv is safe; flagged only in env_fingerprint.py for git SHA capture
+ignore = ["E501", "S101", "B008", "UP042", "S603", "S607"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+

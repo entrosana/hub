@@ -1,4 +1,5 @@
 """Async payroll calculation.  Triggered monthly by taxes/scheduler.py."""
+
 from app.tasks import celery_app
 
 

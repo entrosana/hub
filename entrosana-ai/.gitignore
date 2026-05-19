@@ -30,6 +30,10 @@ env/
 docker/data/
 *.log
 
+# Demo / POC artifacts (audit logs are generated, never committed)
+audit.jsonl
+audit-demo.jsonl
+
 # uv
 .python-version
 

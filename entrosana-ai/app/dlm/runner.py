@@ -1,4 +1,5 @@
 """DLM runner -- the one entry point for LLM calls."""
+
 from pathlib import Path
 from typing import Any
 
@@ -52,7 +53,13 @@ async def run(
         temperature=settings.dlm_temperature,
         messages=[{"role": "user", "content": user_prompt}],
     )
-    output_text = resp.content[0].text if resp.content else ""
+    # `resp.content` is a list of typed blocks; only `TextBlock` has `.text`.
+    # Other variants (tool use, thinking, image, etc.) are silently skipped.
+    output_text = ""
+    for block in resp.content:
+        if isinstance(block, anthropic.types.TextBlock):
+            output_text = block.text
+            break
     return {
         "output": output_text,
         "model_version": settings.dlm_model_version,

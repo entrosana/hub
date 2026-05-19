@@ -1,4 +1,5 @@
 """Async OCR job.  Triggered by documents/service.py."""
+
 from app.tasks import celery_app
 
 

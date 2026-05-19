@@ -12,14 +12,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential libpq-dev curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python deps
-COPY pyproject.toml ./
-RUN pip install -e .
-
-# Copy app
+# Copy source first — hatchling needs the `app/` package present to resolve
+# `[tool.hatch.build.targets.wheel] packages = ["app"]` at install time.
+COPY pyproject.toml README.md ./
 COPY app/ ./app/
 COPY alembic.ini ./
 COPY migrations/ ./migrations/
+
+# Install the package + its runtime deps (one layer; cache is invalidated when
+# either pyproject.toml or app/ changes — acceptable for a small monolith).
+RUN pip install -e .
 
 # Non-root user
 RUN useradd --create-home --uid 1000 entrosana && chown -R entrosana:entrosana /app

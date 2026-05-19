@@ -36,10 +36,33 @@ format.  Semantic versioning.
 ### Added
 
 - `app/core/crud.py` — shared tenant-scoped CRUD helpers.
+- `app/core/base.py` — `TenantBase` / `GlobalBase` ORM mixins on
+  `sqlalchemy.Uuid` (dialect-adapting: native UUID on Postgres,
+  CHAR(32) on SQLite).
+- `app/core/security.py` — bcrypt password-hash helpers, wired into
+  optional `User.password_hash` on identity creation.
 - Real audit-chain tests (`tests/test_audit_chain.py`): verify-intact,
   tamper-detect, tenant-isolation, GENESIS-anchor.
 - `aiosqlite` dev dep + in-memory `db`/`client` fixtures in
   `tests/conftest.py`.
+- DLM doctrine layer (intent routing): `app/dlm/base/{core,cashctrl,
+  env_fingerprint,example_school,verify_replay}.py`,
+  `app/dlm/{intent,demo_intent}.py`,
+  `app/dlm/prompts/v0.1.0/intent_route.md`.
+- `scripts/verify_audit_chain.py` — independent HMAC verifier for the
+  audit JSONL log.
+- `docs/AUDIT.md` + `docs/POC.md` — audit report + POC walkthrough.
+- `docs/brand/logomark.svg` — brand asset.
+- `app/cashctrl/fake.py` — fake CashCtrl adapter for tests.
+- `uv.lock` for reproducible installs.
+
+### Fixed (additional)
+
+- `app/dlm/runner.py` now iterates `resp.content` blocks and only
+  reads `.text` from `TextBlock` instances (skips tool-use / thinking /
+  image blocks instead of crashing).
+- `Dockerfile` builds with hatchling's package-discovery requirement
+  (copies `app/` before `pip install -e .`).
 
 ## [0.0.1] - 2026-05-18
 

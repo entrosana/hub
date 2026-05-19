@@ -1,5 +1,7 @@
 """Celery task queue.  Anything taking >1s goes here."""
+
 from celery import Celery
+
 from app.core.config import settings
 
 celery_app = Celery(

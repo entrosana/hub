@@ -1,4 +1,5 @@
 """Structured logging via structlog."""
+
 import logging
 
 import structlog
