@@ -1,0 +1,67 @@
+[project]
+name = "entrosana-ai"
+version = "0.0.1"
+description = "Audit-grade AI for back-office work.  DLM-based.  Built on CashCtrl."
+readme = "README.md"
+license = { text = "AGPL-3.0-or-later" }
+authors = [{ name = "G2theK", email = "gianson@pm.me" }]
+requires-python = ">=3.12"
+
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "sqlalchemy>=2.0",
+    "asyncpg>=0.30",
+    "alembic>=1.13",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "python-jose[cryptography]>=3.3",
+    "passlib[bcrypt]>=1.7",
+    "celery[redis]>=5.4",
+    "redis>=5.2",
+    "httpx>=0.28",
+    "anthropic>=0.40",
+    "opentelemetry-api>=1.28",
+    "opentelemetry-sdk>=1.28",
+    "opentelemetry-instrumentation-fastapi>=0.49b0",
+    "structlog>=24.4",
+    "tenacity>=9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
+    "httpx>=0.28",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "types-python-jose",
+    "factory-boy>=3.3",
+    "aiosqlite>=0.22",   # in-memory SQLite for audit-chain roundtrip tests
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "B", "UP", "S", "ASYNC"]
+# E501 → line length covered by `ruff format`
+# S101 → allow `assert` in tests
+# B008 → false-positive on FastAPI `Depends(...)` argument defaults (the canonical pattern)
+# UP042 → `class X(str, Enum)` is the compact-dataclass style used in the DLM core; equivalent to StrEnum
+# S603/S607 → subprocess with literal `git` argv is safe; flagged only in env_fingerprint.py for git SHA capture
+ignore = ["E501", "S101", "B008", "UP042", "S603", "S607"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
