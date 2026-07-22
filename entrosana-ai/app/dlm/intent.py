@@ -117,9 +117,14 @@ class ClaudeRouter:
     """LLM-backed router.  Calls Claude via the pinned DLM wrapper."""
 
     async def route(self, user_input: str) -> ToolCall:
+        from app.dlm.normalize import canonical_intent
         from app.dlm.runner import run  # lazy import
 
-        result = await run("intent_route", {"user_input": user_input})
+        ci = canonical_intent(user_input)
+        result = await run(
+            "intent_route",
+            {"user_input": ci.normalized, "intent_hash": ci.intent_hash},
+        )
         return _parse_tool_call(result["output"])
 
 

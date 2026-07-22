@@ -35,12 +35,12 @@ import json
 import os
 import sys
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from app.cashctrl.fake import FakeCashCtrl
-from app.dlm.intent import ClaudeRouter, IntentRouter, MockRouter, ToolCall
+from app.dlm.gateway import DLMGateway
+from app.dlm.intent import ToolCall
 
 Handler = Callable[..., Awaitable[Any]]
 
@@ -87,14 +87,18 @@ def append_audit(payload: dict, key: bytes, log: Path = AUDIT_LOG) -> tuple[str,
 async def run_demo(
     user_input: str, *, use_claude: bool, actor_id: str, tenant_id: str, key: bytes, log: Path
 ) -> int:
-    router: IntentRouter = ClaudeRouter() if use_claude else MockRouter()
+    DLMGateway.reset()
+    gw = DLMGateway.for_claude() if use_claude else DLMGateway.for_mock()
 
     print(f"user:   {user_input!r}")
-    print(f"router: {'ClaudeRouter (via dlm.runner)' if use_claude else 'MockRouter (regex)'}")
+    print(f"router: {'ClaudeRouter (via DLMGateway)' if use_claude else 'MockRouter (regex)'}")
     print()
 
-    # 1) intent → tool call
-    tc: ToolCall = await router.route(user_input)
+    # 1) normalize → intent → tool call
+    routed = await gw.route_intent(user_input)
+    print(f"normalized: {routed.canonical.normalized!r}")
+    print(f"intent_hash: {routed.canonical.intent_hash[:16]}…")
+    tc = ToolCall(routed.tool, routed.args)
     print(f"intent → tool: {tc.tool}")
     print(f"               args: {tc.args}")
     print()
@@ -130,16 +134,25 @@ async def run_demo(
     print()
 
     # 4) sign the audit event
+    audit_row = gw.build_query_audit(
+        routed,
+        result_count=len(result) if isinstance(result, list) else (0 if result is None else 1),
+        tenant_id=tenant_id,
+        actor_id=actor_id,
+    )
     audit_payload = {
-        "ts": datetime.now(UTC).isoformat(timespec="seconds"),
-        "tenant_id": tenant_id,
-        "actor_id": actor_id,
-        "action": "query.executed",
-        "user_input": user_input,
-        "tool_call": {"tool": tc.tool, "args": tc.args},
-        "result_count": len(result) if isinstance(result, list) else (0 if result is None else 1),
-        "provenance": "record",
-        "source": "cashctrl",
+        "ts": audit_row.ts,
+        "tenant_id": audit_row.tenant_id,
+        "actor_id": audit_row.actor_id,
+        "action": audit_row.action,
+        "user_input": audit_row.user_input,
+        "normalized_input": audit_row.normalized_input,
+        "intent_hash": audit_row.intent_hash,
+        "tool_call": audit_row.tool_call,
+        "result_count": audit_row.result_count,
+        "provenance": audit_row.provenance,
+        "source": audit_row.source,
+        "env_fp": audit_row.env_fp,
     }
     prev, sig = append_audit(audit_payload, key, log)
 

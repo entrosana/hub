@@ -1,0 +1,11 @@
+{
+  "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "doc_id": "inv-ewz-001",
+  "fields": {
+    "amount": "412.50",
+    "currency": "CHF",
+    "vendor_iban": "CH0900700110000123456"
+  },
+  "provenance": "record",
+  "provider": ""
+}

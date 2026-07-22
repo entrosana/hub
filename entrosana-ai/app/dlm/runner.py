@@ -1,4 +1,8 @@
-"""DLM runner -- the one entry point for LLM calls."""
+"""DLM runner — internal LLM caller used by :class:`app.dlm.gateway.DLMGateway`.
+
+Application code should use ``DLMGateway.run_llm()`` / ``route_intent()``, not
+this module directly.
+"""
 
 from pathlib import Path
 from typing import Any
