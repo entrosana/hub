@@ -74,6 +74,25 @@ def _month_range(text: str, year: str = "2026") -> tuple[str, str] | None:
     return None
 
 
+# Explicit ISO date range, e.g. "2026-05-01 to 2026-05-31". Swiss DMY dates are
+# already converted to ISO by normalize_intent_text before routing. Without this,
+# a numeric/ISO range was silently dropped and the query ran UNSCOPED (audit M6).
+_ISO = r"(20\d{2}-\d{2}-\d{2})"
+_ISO_RANGE = re.compile(rf"{_ISO}\s*(?:to|bis|until|through|[-–—])\s*{_ISO}", re.IGNORECASE)
+
+
+def _iso_range(text: str) -> tuple[str, str] | None:
+    if m := _ISO_RANGE.search(text):
+        return m.group(1), m.group(2)
+    return None
+
+
+def _date_range(text: str) -> tuple[str, str] | None:
+    """Extract a date range: explicit ISO range first (most specific), then a
+    month name. This is what preserves the user's scope into the tool call."""
+    return _iso_range(text) or _month_range(text)
+
+
 class MockRouter:
     """Regex-based router.  Same input → same tool call, every time."""
 
@@ -94,13 +113,13 @@ class MockRouter:
             user_input,
         ):
             args: dict = {"contact_name": m.group(1).strip()}
-            rng = _month_range(s)
+            rng = _date_range(user_input)
             if rng:
                 args["date_from"], args["date_to"] = rng
             return ToolCall("cashctrl.journal_list", args)
 
         # journal_list with explicit date range, no contact
-        rng = _month_range(s)
+        rng = _date_range(user_input)
         if rng:
             return ToolCall("cashctrl.journal_list", {"date_from": rng[0], "date_to": rng[1]})
 

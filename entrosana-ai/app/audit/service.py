@@ -24,7 +24,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.models import AuditChainHead, AuditEvent
+from app.audit.models import AuditChainHead, AuditEvent, DLMInteraction
 from app.core.config import settings
 
 GENESIS = "GENESIS"
@@ -218,3 +218,54 @@ async def verify_chain(session: AsyncSession, tenant_id: UUID) -> tuple[bool, in
     if n > 0 and prev != head.head_hmac:  # final hmac must match the anchor
         return False, n, None
     return True, n, None
+
+
+async def record_dlm(
+    session: AsyncSession,
+    *,
+    tenant_id: UUID,
+    input_payload: dict,
+    runner_result: dict,
+    audit_event_id: UUID | None = None,
+) -> DLMInteraction:
+    """Persist one signed DLM interaction row (audit M4 — this row was declared
+    mandatory by runner.run's contract but never actually written).
+
+    `runner_result` is exactly the dict returned by `app.dlm.runner.run`
+    (output + model_version + prompt_version + retrieval_keys + token counts).
+    `audit_event_id` links the interaction to the audit event it justified, when
+    the call drove a recorded action. The row's hmac is a standalone signature of
+    the pinned inputs/outputs (this is a supplementary log, not the append-only
+    chain), signed with the current audit key.
+    """
+    output_payload = {
+        "output": runner_result.get("output", ""),
+        "tokens_in": runner_result.get("tokens_in"),
+        "tokens_out": runner_result.get("tokens_out"),
+    }
+    retrieval_keys = sorted(runner_result.get("retrieval_keys", []))
+    signed = {
+        "tenant_id": str(tenant_id),
+        "audit_event_id": str(audit_event_id) if audit_event_id else None,
+        "model_version": runner_result.get("model_version", ""),
+        "prompt_version": runner_result.get("prompt_version", ""),
+        "temperature": settings.dlm_temperature,
+        "input": input_payload,
+        "output": output_payload,
+        "retrieval_keys": retrieval_keys,
+    }
+    _key_id, key = _current_key()
+    interaction = DLMInteraction(
+        tenant_id=tenant_id,
+        audit_event_id=audit_event_id,
+        model_version=runner_result.get("model_version", ""),
+        prompt_version=runner_result.get("prompt_version", ""),
+        temperature=settings.dlm_temperature,
+        input_payload=input_payload,
+        output_payload=output_payload,
+        retrieval_keys=retrieval_keys,
+        hmac=_sign("", signed, key),  # standalone signature (not the chain)
+    )
+    session.add(interaction)
+    await session.flush()
+    return interaction

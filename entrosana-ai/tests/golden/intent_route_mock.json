@@ -16,7 +16,10 @@
     "tool": "cashctrl.contact_lookup"
   },
   "payments from 01.05.2026 to 31.05.2026": {
-    "args": {},
+    "args": {
+      "date_from": "2026-05-01",
+      "date_to": "2026-05-31"
+    },
     "intent_hash": "5daec19862ec8d3cc2d3f981caf23d2593e7fde1091647296d1dece09add280b",
     "tool": "cashctrl.journal_list"
   },
