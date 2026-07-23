@@ -58,4 +58,5 @@ build:docker:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - docker push $CI_REGISTRY_IMAGE:latest
     - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
-  allow_failure: true
+  # A broken image must fail the pipeline (was allow_failure:true, which let a
+  # non-building/broken image pass silently — audit L5).

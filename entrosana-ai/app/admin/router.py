@@ -9,7 +9,7 @@ from app.admin import repository, service
 from app.admin.models import Person
 from app.admin.schemas import PersonIn, PersonOut
 from app.core.crud import list_for_tenant
-from app.core.dependencies import get_db, get_tenant_id
+from app.core.dependencies import get_actor_id, get_db, get_tenant_id
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -30,12 +30,13 @@ async def list_persons(
 async def create_person(
     payload: PersonIn,
     tenant_id: UUID = Depends(get_tenant_id),
+    actor_id: str = Depends(get_actor_id),
     db: AsyncSession = Depends(get_db),
 ):
     person = await service.create_person(
         db,
         tenant_id=tenant_id,
-        actor_id="system",
+        actor_id=actor_id,
         name=payload.name,
         kind=payload.kind,
         email=payload.email,

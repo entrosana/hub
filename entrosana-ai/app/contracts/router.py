@@ -9,7 +9,7 @@ from app.contracts import repository, service
 from app.contracts.models import Contract
 from app.contracts.schemas import ContractIn, ContractOut
 from app.core.crud import list_for_tenant
-from app.core.dependencies import get_db, get_tenant_id
+from app.core.dependencies import get_actor_id, get_db, get_tenant_id
 
 router = APIRouter(prefix="/contracts", tags=["contracts"])
 
@@ -30,12 +30,13 @@ async def list_contracts(
 async def draft_contract(
     payload: ContractIn,
     tenant_id: UUID = Depends(get_tenant_id),
+    actor_id: str = Depends(get_actor_id),
     db: AsyncSession = Depends(get_db),
 ):
     contract = await service.draft_contract(
         db,
         tenant_id=tenant_id,
-        actor_id="system",
+        actor_id=actor_id,
         title=payload.title,
         template_version=payload.template_version,
     )

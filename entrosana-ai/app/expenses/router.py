@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.crud import list_for_tenant
-from app.core.dependencies import get_db, get_tenant_id
+from app.core.dependencies import get_actor_id, get_db, get_tenant_id
 from app.expenses import repository, service
 from app.expenses.models import Expense
 from app.expenses.schemas import ExpenseIn, ExpenseOut
@@ -30,12 +30,13 @@ async def list_expenses(
 async def submit_expense(
     payload: ExpenseIn,
     tenant_id: UUID = Depends(get_tenant_id),
+    actor_id: str = Depends(get_actor_id),
     db: AsyncSession = Depends(get_db),
 ):
     expense = await service.submit_expense(
         db,
         tenant_id=tenant_id,
-        actor_id="system",
+        actor_id=actor_id,
         description=payload.description,
         amount_cents=payload.amount_cents,
         currency=payload.currency,

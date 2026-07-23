@@ -10,7 +10,7 @@ from app.billing import repository, service
 from app.billing.models import Invoice
 from app.billing.schemas import InvoiceIn, InvoiceOut
 from app.core.crud import list_for_tenant
-from app.core.dependencies import get_db, get_tenant_id
+from app.core.dependencies import get_actor_id, get_db, get_tenant_id
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -34,12 +34,13 @@ async def list_invoices(
 async def issue_invoice(
     payload: InvoiceIn,
     tenant_id: UUID = Depends(get_tenant_id),
+    actor_id: str = Depends(get_actor_id),
     db: AsyncSession = Depends(get_db),
 ):
     invoice = await service.issue_invoice(
         db,
         tenant_id=tenant_id,
-        actor_id="system",
+        actor_id=actor_id,
         number=payload.number,
         family_id=payload.family_id,
         amount_cents=payload.amount_cents,

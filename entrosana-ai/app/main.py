@@ -2,15 +2,17 @@
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.accounting.router import router as accounting_router
 from app.addresses.router import router as addresses_router
 from app.admin.router import router as admin_router
 from app.audit.router import router as audit_router
+from app.auth.router import router as auth_router
 from app.billing.router import router as billing_router
 from app.contracts.router import router as contracts_router
+from app.core.auth import get_current_principal, require_role
 from app.core.config import settings
 from app.core.logging import configure_logging
 from app.core.tracing import setup_tracing
@@ -57,11 +59,19 @@ async def health():
 
 # Mount module routers under /api/v1
 PREFIX = "/api/v1"
+
+# Auth endpoints are public where they need to be (/login, /refresh); mounted
+# without the global auth gate so a caller can obtain a token.
+app.include_router(auth_router, prefix=PREFIX)
+
+# Every domain router is gated: no endpoint is reachable without a verified
+# access token. This is defense-in-depth on top of get_tenant_id (which also
+# requires the principal) — a future route that forgets get_tenant_id is still
+# protected.
 for r in (
     identity_router,
     audit_router,
     accounting_router,
-    admin_router,
     scheduling_router,
     contracts_router,
     expenses_router,
@@ -71,4 +81,8 @@ for r in (
     billing_router,
     documents_router,
 ):
-    app.include_router(r, prefix=PREFIX)
+    app.include_router(r, prefix=PREFIX, dependencies=[Depends(get_current_principal)])
+
+# Admin surface additionally requires the "admin" role (audit: role checks on
+# admin/mutating routes).
+app.include_router(admin_router, prefix=PREFIX, dependencies=[Depends(require_role("admin"))])

@@ -12,9 +12,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, ClassVar, Self
 
-from app.dlm.base.core import Agent, Decision, DLM, Features, Verifier, audit_chain
+from app.dlm.base.core import DLM, Agent, Decision, Features, Verifier, audit_chain
 from app.dlm.base.env_fingerprint import RuntimeFingerprint
-from app.dlm.intent import ClaudeRouter, IntentRouter, MockRouter, ToolCall as IntentToolCall
+from app.dlm.intent import ClaudeRouter, IntentRouter, MockRouter
+from app.dlm.intent import ToolCall as IntentToolCall
 from app.dlm.normalize import CanonicalIntent, canonical_intent
 
 

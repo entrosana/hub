@@ -9,7 +9,7 @@ from app.accounting import repository, service
 from app.accounting.models import Entry
 from app.accounting.schemas import EntryIn, EntryOut
 from app.core.crud import list_for_tenant
-from app.core.dependencies import get_db, get_tenant_id
+from app.core.dependencies import get_actor_id, get_db, get_tenant_id
 
 router = APIRouter(prefix="/accounting", tags=["accounting"])
 
@@ -30,12 +30,13 @@ async def list_entries(
 async def propose_entry(
     payload: EntryIn,
     tenant_id: UUID = Depends(get_tenant_id),
+    actor_id: str = Depends(get_actor_id),
     db: AsyncSession = Depends(get_db),
 ):
     entry = await service.propose_entry(
         db,
         tenant_id=tenant_id,
-        actor_id="system",
+        actor_id=actor_id,
         description=payload.description,
         amount_cents=payload.amount_cents,
         currency=payload.currency,

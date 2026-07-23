@@ -16,6 +16,13 @@ Without `DEMO_AUDIT_KEY` set, uses the same deterministic fallback key as
 
 A real production verifier would read the key from a hardware module or a
 sealed secret store.  The two paths share the exact same crypto.
+
+NOTE — scope of this script: it is the POC verifier for the demo JSONL log and
+checks per-row `chained` + `signed` only. The AUTHORITATIVE, tamper-evident
+verification for live data is `app.audit.service.verify_chain`, which
+additionally enforces a signed monotonic `seq`, a persisted anchored head
+(so tail-truncation is caught), and per-row `key_id` keyring lookup. Do not
+treat a PASS here as equivalent to the DB chain's guarantees.
 """
 
 from __future__ import annotations

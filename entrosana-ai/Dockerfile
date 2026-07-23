@@ -14,14 +14,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy source first — hatchling needs the `app/` package present to resolve
 # `[tool.hatch.build.targets.wheel] packages = ["app"]` at install time.
-COPY pyproject.toml README.md ./
+COPY pyproject.toml uv.lock README.md ./
 COPY app/ ./app/
 COPY alembic.ini ./
 COPY migrations/ ./migrations/
 
-# Install the package + its runtime deps (one layer; cache is invalidated when
-# either pyproject.toml or app/ changes — acceptable for a small monolith).
-RUN pip install -e .
+# Reproducible install from the committed lockfile (uv) — NOT from the `>=`
+# ranges in pyproject, so the built image is deterministic. `--frozen` fails if
+# uv.lock is out of sync; `--no-dev` omits test/lint deps from the runtime image.
+RUN pip install --no-cache-dir uv \
+    && uv sync --frozen --no-dev \
+    && rm -rf /root/.cache
+ENV PATH="/app/.venv/bin:$PATH"
 
 # Non-root user
 RUN useradd --create-home --uid 1000 entrosana && chown -R entrosana:entrosana /app

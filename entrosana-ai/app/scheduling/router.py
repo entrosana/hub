@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.crud import list_for_tenant
-from app.core.dependencies import get_db, get_tenant_id
+from app.core.dependencies import get_actor_id, get_db, get_tenant_id
 from app.scheduling import repository, service
 from app.scheduling.models import Schedule
 from app.scheduling.schemas import ScheduleIn, ScheduleOut
@@ -32,12 +32,13 @@ async def list_schedules(
 async def create_schedule(
     payload: ScheduleIn,
     tenant_id: UUID = Depends(get_tenant_id),
+    actor_id: str = Depends(get_actor_id),
     db: AsyncSession = Depends(get_db),
 ):
     schedule = await service.create_schedule(
         db,
         tenant_id=tenant_id,
-        actor_id="system",
+        actor_id=actor_id,
         title=payload.title,
         starts_at=payload.starts_at,
         ends_at=payload.ends_at,

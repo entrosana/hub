@@ -26,6 +26,8 @@ dependencies = [
     "opentelemetry-instrumentation-fastapi>=0.49b0",
     "structlog>=24.4",
     "tenacity>=9.0",
+    "pyjwt>=2.8",
+    "bcrypt<4.1",
 ]
 
 [project.optional-dependencies]

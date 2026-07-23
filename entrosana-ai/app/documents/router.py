@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.crud import list_for_tenant
-from app.core.dependencies import get_db, get_tenant_id
+from app.core.dependencies import get_actor_id, get_db, get_tenant_id
 from app.documents import repository, service
 from app.documents.models import Document
 from app.documents.schemas import DocumentIn, DocumentOut
@@ -30,12 +30,13 @@ async def list_documents(
 async def register_document(
     payload: DocumentIn,
     tenant_id: UUID = Depends(get_tenant_id),
+    actor_id: str = Depends(get_actor_id),
     db: AsyncSession = Depends(get_db),
 ):
     document = await service.register_document(
         db,
         tenant_id=tenant_id,
-        actor_id="system",
+        actor_id=actor_id,
         filename=payload.filename,
         mime_type=payload.mime_type,
         storage_uri=payload.storage_uri,
