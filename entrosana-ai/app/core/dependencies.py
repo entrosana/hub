@@ -13,10 +13,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import Principal, get_current_principal
 from app.core.database import get_session
+from app.providers.transport import HttpxTransport, Transport
 
 
 async def get_db(session: AsyncSession = Depends(get_session)) -> AsyncSession:
     return session
+
+
+def get_accounting_transport() -> Transport:
+    """The wire the provider executor talks over. Real HTTP in production; tests
+    override this with the offline fake via ``app.dependency_overrides``."""
+    return HttpxTransport()
 
 
 async def get_tenant_id(

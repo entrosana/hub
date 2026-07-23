@@ -44,6 +44,25 @@ class Settings(BaseSettings):
     cashctrl_api_key: str = ""
     cashctrl_webhook_secret: str = ""
 
+    # Accounting providers (multi-backend)
+    # The accounting backend is not hard-wired to CashCtrl: each tenant runs
+    # against a provider selected by name and executed from a pinned declarative
+    # spec (app/providers/specs/<name>.yaml). `default_accounting_provider` is the
+    # fallback when a tenant has no explicit binding. `accounting_provider_bindings`
+    # maps tenant_id -> provider name; parsed from env as JSON, e.g.
+    #   ACCOUNTING_PROVIDER_BINDINGS='{"<tenant-uuid>":"bexio"}'
+    # This is the settings-backed binding source; a DB-backed per-tenant binding
+    # table supersedes it later without touching the executor/registry (ADR 0002).
+    default_accounting_provider: str = "cashctrl"
+    accounting_provider_bindings: dict[str, str] = {}
+    # Per-tenant provider credentials: tenant_id -> {settings_attr: secret}, e.g.
+    #   ACCOUNTING_TENANT_CREDENTIALS='{"<tenant-uuid>":{"cashctrl_api_key":"..."}}'
+    # SECURITY: multi-tenant production MUST set these. With only the global
+    # cashctrl_api_key, every tenant shares one provider account — and therefore
+    # one data pool (cross-tenant exposure). Settings-backed interim; moves to
+    # encrypted DB rows with the binding table (ADR 0002).
+    accounting_tenant_credentials: dict[str, dict[str, str]] = {}
+
     # Auth
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 60

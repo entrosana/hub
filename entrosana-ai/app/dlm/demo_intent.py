@@ -34,15 +34,15 @@ import hmac
 import json
 import os
 import sys
-from collections.abc import Awaitable, Callable
+from decimal import Decimal
 from pathlib import Path
-from typing import Any
 
-from app.cashctrl.fake import FakeCashCtrl
 from app.dlm.gateway import DLMGateway
 from app.dlm.intent import ToolCall
-
-Handler = Callable[..., Awaitable[Any]]
+from app.providers.executor import ProviderExecutor
+from app.providers.fake import FakeCashCtrlTransport
+from app.providers.registry import ProviderRegistry
+from app.providers.vocabulary import validate_args
 
 AUDIT_LOG = Path(os.environ.get("AUDIT_LOG", "audit-demo.jsonl"))
 GENESIS = "GENESIS"
@@ -103,28 +103,34 @@ async def run_demo(
     print(f"               args: {tc.args}")
     print()
 
-    # 2) dispatch to CashCtrl (system of record)
-    cc = FakeCashCtrl()
-    handlers: dict[str, Handler] = {
-        "cashctrl.contact_lookup": cc.contact_lookup,
-        "cashctrl.journal_list": cc.journal_list,
-        "cashctrl.journal_get": cc.journal_get,
-    }
-    handler = handlers.get(tc.tool)
-    if handler is None:
-        print(f"error: unknown tool {tc.tool!r}", file=sys.stderr)
+    # 2) dispatch to the tenant's accounting provider (system of record).
+    #    Same code path for CashCtrl, bexio, or any backend — the executor runs
+    #    whichever declarative spec the tenant is bound to. The demo uses the
+    #    offline fake transport (no network) with an explicit dummy credential:
+    #    the executor fails closed on unset secrets, and the fake ignores auth.
+    registry = ProviderRegistry()
+    executor = ProviderExecutor(
+        registry.resolve(tenant_id),
+        FakeCashCtrlTransport(),
+        credential_overrides={"cashctrl_api_key": "demo-offline-key"},
+    )
+    try:
+        vargs = validate_args(tc.tool, tc.args)  # grammar cage
+        cres = await executor.execute(tc.tool, vargs.model_dump())
+    except Exception as e:  # noqa: BLE001 — POC surfaces any failure to stderr
+        print(f"error: {e}", file=sys.stderr)
         return 2
-    result = await handler(**tc.args)
+    result = cres.data
 
     # 3) show
-    print("cashctrl response (canonical truth):")
+    print(f"{cres.source} response (canonical truth):")
     if isinstance(result, list):
         if not result:
             print("  (no entries match)")
         else:
             for r in result:
                 print(f"  · {r['date']}  {r['id']}  CHF {r['amount']:>10}  {r['title']}")
-            total = await cc.total(result)
+            total = sum((Decimal(str(r["amount"])) for r in result), Decimal("0"))
             print(f"  ── total: CHF {total}")
     elif result is None:
         print("  (not found)")
@@ -136,9 +142,10 @@ async def run_demo(
     # 4) sign the audit event
     audit_row = gw.build_query_audit(
         routed,
-        result_count=len(result) if isinstance(result, list) else (0 if result is None else 1),
+        result_count=cres.count,
         tenant_id=tenant_id,
         actor_id=actor_id,
+        source=cres.source,
     )
     audit_payload = {
         "ts": audit_row.ts,

@@ -1,9 +1,13 @@
-"""User prose → structured CashCtrl tool call.
+"""User prose → structured canonical tool call.
 
 This is the only LLM-touching surface that produces values feeding the audit
-chain — and even then only INDIRECTLY: the LLM emits a tool call (verb +
-structured args), which is then executed against CashCtrl.  CashCtrl's
-response is the source of fact.  The LLM never invents data.
+chain — and even then only INDIRECTLY: the LLM emits a canonical tool call (verb
++ structured args), which is then validated against the grammar cage
+(``app.providers.vocabulary``) and executed against the tenant's accounting
+provider.  The provider's response is the source of fact.  The LLM never invents
+data.  Tool names are provider-neutral (``journal.list``, ``contact.lookup``),
+never vendor-specific — the same intent runs against CashCtrl, bexio, or any
+other backend the tenant is bound to.
 
 Two backends:
 
@@ -101,11 +105,11 @@ class MockRouter:
 
         # contact lookup: "contact 4827" or "show contact <id>"
         if m := re.search(r"\bcontact\s+(\d+)\b", s):
-            return ToolCall("cashctrl.contact_lookup", {"id": int(m.group(1))})
+            return ToolCall("contact.lookup", {"id": int(m.group(1))})
 
         # journal_get: "JE-YYYY-NNNN"
         if m := re.search(r"\b(JE-\d{4}-\d{3,})\b", user_input):
-            return ToolCall("cashctrl.journal_get", {"id": m.group(1)})
+            return ToolCall("journal.get", {"id": m.group(1)})
 
         # journal_list with contact name: "payments of <name>"
         if m := re.search(
@@ -116,15 +120,15 @@ class MockRouter:
             rng = _date_range(user_input)
             if rng:
                 args["date_from"], args["date_to"] = rng
-            return ToolCall("cashctrl.journal_list", args)
+            return ToolCall("journal.list", args)
 
         # journal_list with explicit date range, no contact
         rng = _date_range(user_input)
         if rng:
-            return ToolCall("cashctrl.journal_list", {"date_from": rng[0], "date_to": rng[1]})
+            return ToolCall("journal.list", {"date_from": rng[0], "date_to": rng[1]})
 
         # default: list latest 10
-        return ToolCall("cashctrl.journal_list", {})
+        return ToolCall("journal.list", {})
 
 
 # ────────────────────────────────────────────────────────────────────────

@@ -13,6 +13,9 @@ os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("SECRET_KEY", "test-secret-do-not-use-in-prod")
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 os.environ.setdefault("DLM_AUDIT_HMAC_KEY", "test-audit-hmac-key")
+# The provider executor fails CLOSED on unset secrets (never sends a blank
+# credential); the fake transport ignores auth, so any value works for tests.
+os.environ.setdefault("CASHCTRL_API_KEY", "test-cashctrl-key")
 
 import pytest  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402
