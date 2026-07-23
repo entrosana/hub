@@ -112,7 +112,10 @@ async def run_demo(
     executor = ProviderExecutor(
         registry.resolve(tenant_id),
         FakeCashCtrlTransport(),
-        credential_overrides={"cashctrl_api_key": "demo-offline-key"},
+        credential_overrides={
+            "cashctrl_api_key": "demo-offline-key",
+            "cashctrl_api_base": "http://cashctrl.demo-offline.test",
+        },
     )
     try:
         vargs = validate_args(tc.tool, tc.args)  # grammar cage

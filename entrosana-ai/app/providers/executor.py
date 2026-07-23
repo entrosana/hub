@@ -22,6 +22,7 @@ import base64
 import re
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import quote
 
 from app.core.config import settings
 from app.providers.errors import ExecutionError, UnsupportedOperationError
@@ -168,7 +169,7 @@ class ProviderExecutor:
         op_name: str,
     ) -> tuple[list[Any], list[dict[str, Any]]]:
         """Send the request (following pagination for lists); return (raw_pages, mapped_items)."""
-        base = (getattr(settings, self.spec.base_url_setting, "") or "").rstrip("/")
+        base = self._base_url()
         path = self._fill_path(http.path, args)
         params = self._resolve_params(http.query, args, step_results)
         body = self._resolve_params(http.body, args, step_results) or None
@@ -218,10 +219,17 @@ class ProviderExecutor:
         return raw_pages, items
 
     def _check_envelope(self, raw: Any, rmap: ResponseMap, op_name: str) -> None:
-        """HTTP-200 logical failures (e.g. CashCtrl ``success: false``) fail loud."""
+        """HTTP-200 logical failures (e.g. CashCtrl ``success: false``) fail loud.
+
+        Boolean-STRICT: only ``True``/``1``/the string ``"true"`` count as success —
+        a provider sending ``"false"`` (string) must not pass a Python truthiness
+        check and get its error body signed as an empty success.
+        """
         if not rmap.success_path:
             return
-        if _dig(raw, rmap.success_path):
+        flag = _dig(raw, rmap.success_path)
+        ok = flag is True or flag == 1 or (isinstance(flag, str) and flag.strip().lower() == "true")
+        if ok:
             return
         msg = _dig(raw, rmap.error_message_path) if rmap.error_message_path else None
         raise ExecutionError(
@@ -250,13 +258,37 @@ class ProviderExecutor:
                 f"argument(s) {sorted(unconsumed)} — refusing to run the query unscoped"
             )
 
+    def _base_url(self) -> str:
+        """Resolve the provider base URL: per-tenant override first, then global
+        settings. Fails CLOSED — an unset/non-http(s) base refuses the call (and a
+        mis-pointed base_url_setting cannot leak an arbitrary settings value into
+        request URLs or error text, because secrets don't start with http)."""
+        raw = self._credential_overrides.get(self.spec.base_url_setting) or getattr(
+            settings, self.spec.base_url_setting, ""
+        )
+        base = (raw or "").strip().rstrip("/") if isinstance(raw, str) else ""
+        if not base.startswith(("http://", "https://")):
+            raise ExecutionError(
+                f"provider {self.spec.name!r}: base URL setting "
+                f"{self.spec.base_url_setting!r} is not configured with an http(s) URL — "
+                "refusing to send the request"
+            )
+        return base
+
     def _fill_path(self, template: str, args: dict[str, Any]) -> str:
+        """Fill {arg} placeholders with the arg PERCENT-ENCODED as one path
+        segment (quote with safe="") — an LLM-proposed value like '../admin',
+        'x?evil=1' or one containing CR/LF cannot break out of its segment."""
+
         def repl(m: re.Match[str]) -> str:
             name = m.group(1)
             val = args.get(name)
             if val is None:
                 raise ExecutionError(f"path {template!r} needs arg {name!r}")
-            return str(val)
+            encoded = quote(str(val), safe="")
+            if not encoded:
+                raise ExecutionError(f"path {template!r} arg {name!r} is empty")
+            return encoded
 
         return _PLACEHOLDER.sub(repl, template)
 
@@ -325,10 +357,12 @@ class ProviderExecutor:
 
     def _secret(self, setting_name: str | None) -> str:
         """Per-tenant override first, then global settings. Fails CLOSED: an unset
-        secret refuses the request rather than sending a blank credential."""
+        or whitespace-only secret refuses the request rather than sending a blank
+        credential (``"   "`` is truthy in Python — strip before deciding)."""
         if not setting_name:
             raise ExecutionError(f"provider {self.spec.name!r}: auth references no setting")
-        val = self._credential_overrides.get(setting_name) or getattr(settings, setting_name, "")
+        raw = self._credential_overrides.get(setting_name) or getattr(settings, setting_name, "")
+        val = raw.strip() if isinstance(raw, str) else ""
         if not val:
             raise ExecutionError(
                 f"provider {self.spec.name!r}: secret {setting_name!r} is not configured — "
@@ -348,8 +382,23 @@ class ProviderExecutor:
         """
         if result_kind == ResultKind.LIST:
             payload = _dig(raw, rmap.list_path) if rmap.list_path else raw
-            rows = payload if isinstance(payload, list) else []
-            return [self._remap(r, rmap) for r in rows if isinstance(r, dict)]
+            if payload is None:
+                return []  # explicit null = no rows (common provider idiom)
+            if not isinstance(payload, list):
+                raise ExecutionError(
+                    f"provider {self.spec.name!r}: list payload at "
+                    f"{rmap.list_path!r} is not an array — refusing to sign a guess"
+                )
+            out: list[dict[str, Any]] = []
+            for r in payload:
+                if not isinstance(r, dict):
+                    # silently dropping elements would sign an under-count as complete
+                    raise ExecutionError(
+                        f"provider {self.spec.name!r}: non-object element in list "
+                        f"payload at {rmap.list_path!r} — refusing to sign a partial list"
+                    )
+                out.append(self._remap(r, rmap))
+            return out
 
         payload = _dig(raw, rmap.item_path) if rmap.item_path else raw
         if not isinstance(payload, dict):

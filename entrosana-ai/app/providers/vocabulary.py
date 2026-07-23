@@ -28,6 +28,11 @@ from app.providers.errors import ArgValidationError, UnknownOpError
 # the provider is the source of fact for what the date actually resolves to.
 IsoDate = Annotated[str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}$")]
 
+# Audit-grade money: a plain decimal string with up to 2 fraction digits.
+# Rejects "", scientific notation ("1e10"), padding (" 1.00 "), and floats
+# (type is str) — a signed mutation proposal never carries a malformed amount.
+MoneyStr = Annotated[str, StringConstraints(pattern=r"^-?\d{1,12}(\.\d{1,2})?$")]
+
 
 class OpKind(str, Enum):
     QUERY = "query"  # reads; safe to execute immediately
@@ -66,6 +71,14 @@ class JournalListArgs(_Args):
     date_from: IsoDate | None = None
     date_to: IsoDate | None = None
 
+    @model_validator(mode="after")
+    def _one_contact_scope(self) -> JournalListArgs:
+        # Contradictory scopes must fail loud, not silently prefer one: with both
+        # present the name-resolve step would win and the explicit id be ignored.
+        if self.contact_id is not None and self.contact_name:
+            raise ValueError("journal.list takes contact_id OR contact_name, not both")
+        return self
+
 
 class JournalGetArgs(_Args):
     id: str
@@ -73,7 +86,7 @@ class JournalGetArgs(_Args):
 
 class JournalCreateArgs(_Args):
     date: IsoDate
-    amount: str  # decimal string; never a float (audit-grade money)
+    amount: MoneyStr
     debit_account: int
     credit_account: int
     title: str

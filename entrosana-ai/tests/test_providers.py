@@ -446,3 +446,169 @@ def test_pathfinder_proposes_plausible_endpoints():
     assert props["journal.list"][0].method == "GET"
     assert props["contact.lookup"][0].path == "/person/read.json"
     assert props["journal.create"][0].method == "POST"
+
+
+# ── Grok external-audit round 2 fixes ───────────────────────────────────────
+
+
+def test_claude_prompt_teaches_only_canonical_ops():
+    """Grok finding 1: the pinned intent_route prompt must teach the canonical
+    vocabulary — a prompt naming vendor ops routes every real-LLM call into a
+    cage rejection (dead Claude path with a green suite)."""
+    from pathlib import Path
+
+    from app.core.config import settings
+
+    prompt = (Path("app/dlm/prompts") / settings.dlm_prompt_version / "intent_route.md").read_text(
+        encoding="utf-8"
+    )
+    assert "cashctrl." not in prompt
+    for op in CANONICAL_OPS:
+        assert op in prompt, f"prompt does not teach {op}"
+
+
+class _PathCaptureTransport:
+    def __init__(self) -> None:
+        self.path = ""
+
+    async def send(self, req):
+        self.path = req.path
+        return {"data": {"reference": "X"}}
+
+
+async def test_path_args_are_percent_encoded():
+    """Grok finding 2: an LLM-proposed path arg must not escape its segment."""
+    spec = _spec(
+        "pathenc",
+        {
+            "journal.get": {
+                "http": {
+                    "method": "GET",
+                    "path": "/journal/{id}/read.json",
+                    "response": {"item_path": "data"},
+                }
+            },
+        },
+    )
+    transport = _PathCaptureTransport()
+    ex = ProviderExecutor(spec, transport)
+    await ex.execute("journal.get", {"id": "../admin/secret?x=1\r\nX-Evil: 1"})
+    assert transport.path == "/journal/..%2Fadmin%2Fsecret%3Fx%3D1%0D%0AX-Evil%3A%201/read.json"
+    assert "/../" not in transport.path
+    assert "\r" not in transport.path and "\n" not in transport.path
+
+
+async def test_whitespace_secret_fails_closed(monkeypatch):
+    """Grok finding 3: '   ' is truthy — must still refuse."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "cashctrl_api_key", "   ")
+    ex = _cashctrl_executor()
+    with pytest.raises(ExecutionError, match="not configured"):
+        await ex.execute("contact.lookup", {"id": 4827})
+
+
+def test_contact_name_and_id_conflict_rejected():
+    """Grok finding 4: contradictory scopes fail loud instead of silently
+    preferring the name-resolve step over the explicit id."""
+    with pytest.raises(ArgValidationError, match="not both"):
+        validate_args("journal.list", {"contact_name": "Anna", "contact_id": 9201})
+
+
+async def test_missing_base_url_fails_closed(monkeypatch):
+    """Grok finding 5: no http(s) base URL ⇒ refuse, never a relative request."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "cashctrl_api_base", "")
+    ex = _cashctrl_executor()
+    with pytest.raises(ExecutionError, match="base URL"):
+        await ex.execute("contact.lookup", {"id": 4827})
+
+
+def test_amount_cage_rejects_malformed_money():
+    """Grok finding 6: '', '1e10', ' 1.00 ' must not enter a signed proposal."""
+    base = {"date": "2026-01-01", "debit_account": 1, "credit_account": 2, "title": "t"}
+    for bad in ("", "1e10", " 1.00 ", "1,50", "1.234"):
+        with pytest.raises(ArgValidationError):
+            validate_args("journal.create", {**base, "amount": bad})
+    validate_args("journal.create", {**base, "amount": "1450.00"})  # well-formed passes
+
+
+class _StringFalseTransport:
+    async def send(self, req):
+        return {"success": "false", "message": "nope", "data": {"id": "X"}}
+
+
+async def test_envelope_is_boolean_strict():
+    """Grok finding 7: the string "false" is truthy in Python — must fail loud."""
+    spec = _spec(
+        "strfalse",
+        {
+            "journal.get": {
+                "http": {
+                    "method": "GET",
+                    "path": "/j.json",
+                    "query": {"id": {"arg": "id", "required": True}},
+                    "response": {
+                        "success_path": "success",
+                        "error_message_path": "message",
+                        "item_path": "data",
+                    },
+                }
+            },
+        },
+    )
+    ex = ProviderExecutor(spec, _StringFalseTransport())
+    with pytest.raises(ExecutionError, match="nope"):
+        await ex.execute("journal.get", {"id": "X"})
+
+
+class _DirtyListTransport:
+    async def send(self, req):
+        return {"items": [{"id": "A"}, "not-a-dict", {"id": "B"}, 3]}
+
+
+async def test_non_dict_list_elements_fail_loud():
+    """Grok finding 8: dropping elements would sign an under-count as complete."""
+    spec = _spec(
+        "dirty",
+        {
+            "journal.list": {
+                "http": {
+                    "method": "GET",
+                    "path": "/x",
+                    "response": {"list_path": "items"},
+                }
+            },
+        },
+    )
+    ex = ProviderExecutor(spec, _DirtyListTransport())
+    with pytest.raises(ExecutionError, match="non-object element"):
+        await ex.execute("journal.list", {})
+
+
+def test_production_requires_per_tenant_credentials():
+    """Grok finding 9: bound tenants without their own credentials must fail at
+    startup in production (shared provider account = cross-tenant data pool)."""
+    from pydantic import ValidationError as PydanticValidationError
+
+    from app.core.config import Settings
+
+    common = {
+        "environment": "production",
+        "secret_key": "x" * 40,
+        "dlm_audit_hmac_key": "y" * 40,
+        "database_url": "postgresql+asyncpg://u:p@h/db",
+    }
+    with pytest.raises(PydanticValidationError, match="per-tenant credentials"):
+        Settings(
+            **common,
+            accounting_provider_bindings={"t1": "cashctrl", "t2": "cashctrl"},
+            accounting_tenant_credentials={},
+        )
+    # with credentials for every bound tenant it constructs fine
+    Settings(
+        **common,
+        accounting_provider_bindings={"t1": "cashctrl"},
+        accounting_tenant_credentials={"t1": {"cashctrl_api_key": "k1" * 20}},
+    )

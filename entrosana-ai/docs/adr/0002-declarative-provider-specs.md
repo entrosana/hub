@@ -119,6 +119,34 @@ fix is regression-tested (`tests/test_providers.py`, `tests/test_assistant.py`):
 - **Spec version pinned in the signed rows** (`spec_version` in audit `after` +
   `CanonicalResult`), honoring the replay claim.
 
+## Hardening (external audit round 2 — Grok, 9 findings, all fixed)
+
+An independent external audit (Grok, read-only, adversarially re-breaking round 1)
+confirmed the round-1 rails hold and found 9 further defects; verdict was
+SHIP-WITH-FIXES and every finding is fixed + regression-tested:
+
+- **Prompt bundle v0.2.0:** the pinned `intent_route` prompt taught the retired
+  `cashctrl.*` names — every real-LLM call would have died in the cage while the
+  Mock-based suite stayed green. New pinned version teaches only canonical ops
+  (incl. `journal.create`); `dlm_prompt_version` bumped. A test asserts the active
+  prompt names every canonical op and no vendor op.
+- **Path args percent-encoded** (`quote(..., safe="")`): an LLM-proposed
+  `../admin`, `x?evil=1`, or CRLF-bearing path arg cannot escape its segment.
+- **Whitespace-only secrets refused** (strip before the fail-closed check).
+- **Contradictory contact scope refused:** `journal.list` with both `contact_id`
+  and `contact_name` fails validation instead of silently preferring the name.
+- **Base URL fails closed:** unset/non-http(s) base refuses the call — also stops
+  a mis-pointed `base_url_setting` from leaking an arbitrary settings value.
+  Per-tenant overrides may carry the base URL too (per-org subdomains).
+- **`MoneyStr` cage:** amounts are strict decimal strings (`""`, `1e10`,
+  padded, comma, >2 fraction digits all rejected before a signed proposal).
+- **Envelope boolean-strict:** the string `"false"` no longer passes a truthiness
+  check; only `True`/`1`/`"true"` count as success.
+- **Malformed list payloads fail loud:** a non-array payload or non-object list
+  element raises instead of signing an under-count as complete.
+- **Production guard:** every tenant in `accounting_provider_bindings` must have
+  `accounting_tenant_credentials` in production, enforced at startup.
+
 ## Deferred (explicit, not silently missing)
 
 - **OAuth2 auth** (bexio/Xero/QuickBooks): `AuthKind.OAUTH2` is declared; execution
