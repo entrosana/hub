@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.accounting.router import router as accounting_router
 from app.addresses.router import router as addresses_router
 from app.admin.router import router as admin_router
+from app.assistant.router import router as assistant_router
 from app.audit.router import router as audit_router
 from app.auth.router import router as auth_router
 from app.billing.router import router as billing_router
@@ -80,6 +81,7 @@ for r in (
     addresses_router,
     billing_router,
     documents_router,
+    assistant_router,
 ):
     app.include_router(r, prefix=PREFIX, dependencies=[Depends(get_current_principal)])
 

@@ -1,0 +1,129 @@
+# CashCtrl — reference accounting-provider spec (the first adapter, as data).
+#
+# This file IS the CashCtrl adapter: no hand-written client. The one executor
+# (app/providers/executor.py) runs it. Adding another backend (bexio, Abacus, …)
+# means adding a sibling <name>.yaml that passes the same contract tests — no code.
+#
+# PROVENANCE / REVIEW CAVEAT (author-time path-finding → hard-coded here):
+#   The endpoint paths and CashCtrl field names below are MODELED for the
+#   reference adapter and the offline fake transport. Verify each against the live
+#   CashCtrl v3 API (https://app.cashctrl.com/static/help/en/api/index.html) before
+#   pointing a real tenant at it. Path-finding proposes; a human reviews; only then
+#   is it hard-coded. `python -m app.providers.pathfinder <openapi.json>` assists.
+#
+# Secrets are NEVER inline: base_url_setting / key_setting name attributes on
+# app.core.config.settings (cashctrl_api_base / cashctrl_api_key), overridable
+# per tenant via accounting_tenant_credentials.
+#
+# Every response declares the CashCtrl {"success": …} envelope via success_path,
+# so an HTTP-200 logical failure raises instead of being signed as an empty result.
+
+name: cashctrl
+version: "2026-07-23.2"
+base_url_setting: cashctrl_api_base
+
+auth:
+  kind: bearer
+  key_setting: cashctrl_api_key
+
+operations:
+
+  contact.lookup:
+    http:
+      method: GET
+      path: /person/read.json
+      query:
+        id: {arg: id}       # at least one of id/name is guaranteed by the arg model
+        name: {arg: name}
+      response:
+        success_path: success
+        error_message_path: message
+        item_path: data     # unwrap {"success":true,"data":{…}}
+        fields:             # canonical_field: provider_dot_path
+          id: id
+          name: name
+          iban: iban
+          kind: type
+
+  journal.list:
+    # Composite: CashCtrl cannot filter journals by contact NAME in one call, so a
+    # name-scoped query resolves the contact first (step 0, runs only when
+    # contact_name is present), then lists by the resolved id. An unknown name
+    # short-circuits to an EMPTY result — never a silently unscoped query.
+    steps:
+      - when_arg: contact_name
+        method: GET
+        path: /person/read.json
+        query:
+          name: {arg: contact_name}
+        response:
+          success_path: success
+          error_message_path: message
+          item_path: data
+          fields: {id: id}
+      - method: GET
+        path: /journal/list.json
+        query:
+          # resolved contact id; falls back to a directly-supplied contact_id
+          associateId: {source: prev, step: 0, field: id, fallback_arg: contact_id}
+          dateFrom: {arg: date_from}
+          dateTo: {arg: date_to}
+        response:
+          success_path: success
+          error_message_path: message
+          list_path: data   # unwrap {"success":true,"data":[…]}
+          fields:
+            id: reference
+            date: dateAdded
+            contact_id: associateId
+            title: title
+            amount: amount
+            currency: currencyCode
+            debit_account: debitId
+            credit_account: creditId
+
+  journal.get:
+    http:
+      method: GET
+      path: /journal/read.json
+      query:
+        id: {arg: id, required: true}
+      response:
+        success_path: success
+        error_message_path: message
+        item_path: data
+        fields:
+          id: reference
+          date: dateAdded
+          contact_id: associateId
+          title: title
+          amount: amount
+          currency: currencyCode
+          debit_account: debitId
+          credit_account: creditId
+
+  journal.create:            # mutation — dispatched only behind confirm (ADR 0002)
+    http:
+      method: POST
+      path: /journal/create.json
+      body:
+        dateAdded: {arg: date, required: true}
+        amount: {arg: amount, required: true}
+        debitId: {arg: debit_account, required: true}
+        creditId: {arg: credit_account, required: true}
+        title: {arg: title, required: true}
+        associateId: {arg: contact_id}
+        currencyCode: {arg: currency}
+      response:
+        success_path: success
+        error_message_path: message
+        item_path: data
+        fields:
+          id: reference
+          date: dateAdded
+          contact_id: associateId
+          title: title
+          amount: amount
+          currency: currencyCode
+          debit_account: debitId
+          credit_account: creditId

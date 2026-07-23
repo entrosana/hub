@@ -16,11 +16,12 @@ from app.dlm.gateway import DLMGateway
 
 # ── M6 — date scope survives into the tool call ──────────────────────────
 
+
 async def test_swiss_dmy_range_survives_into_tool_call():
     routed = await DLMGateway.for_mock().route_intent(
         "payments of Anna Müller from 01.05.2026 to 31.05.2026"
     )
-    assert routed.tool == "cashctrl.journal_list"
+    assert routed.tool == "journal.list"
     assert routed.args.get("contact_name") == "Anna Müller"
     assert routed.args.get("date_from") == "2026-05-01"
     assert routed.args.get("date_to") == "2026-05-31"
@@ -42,10 +43,11 @@ async def test_month_name_range_still_works():
 
 # ── M4 — DLMInteraction row is written + signed ──────────────────────────
 
+
 async def test_record_dlm_writes_signed_row(db):
     tenant = uuid.uuid4()
     runner_result = {
-        "output": '{"tool":"cashctrl.journal_list","args":{}}',
+        "output": '{"tool":"journal.list","args":{}}',
         "model_version": "claude-sonnet-4-6",
         "prompt_version": "v0.1.0",
         "retrieval_keys": ["k2", "k1"],
@@ -53,7 +55,8 @@ async def test_record_dlm_writes_signed_row(db):
         "tokens_out": 7,
     }
     await audit.record_dlm(
-        db, tenant_id=tenant,
+        db,
+        tenant_id=tenant,
         input_payload={"user_input": "list journals"},
         runner_result=runner_result,
     )
@@ -73,11 +76,16 @@ async def test_record_dlm_writes_signed_row(db):
 async def test_record_dlm_links_to_audit_event(db):
     tenant = uuid.uuid4()
     event = await audit.record(
-        db, tenant_id=tenant, actor_id="a", action="billing.invoice.issue",
-        target_type="invoice", target_id="1",
+        db,
+        tenant_id=tenant,
+        actor_id="a",
+        action="billing.invoice.issue",
+        target_type="invoice",
+        target_id="1",
     )
     row = await audit.record_dlm(
-        db, tenant_id=tenant,
+        db,
+        tenant_id=tenant,
         input_payload={"user_input": "issue an invoice"},
         runner_result={"output": "", "model_version": "m", "prompt_version": "p"},
         audit_event_id=event.id,

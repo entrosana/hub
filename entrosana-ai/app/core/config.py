@@ -32,7 +32,9 @@ class Settings(BaseSettings):
     # DLM / Claude
     anthropic_api_key: str = ""
     dlm_model_version: str = "claude-sonnet-4-6"
-    dlm_prompt_version: str = "v0.1.0"
+    # v0.2.0: canonical provider-neutral tool names (v0.1.0 taught the retired
+    # cashctrl.* names, which the grammar cage rejects — Grok audit finding 1).
+    dlm_prompt_version: str = "v0.2.0"
     dlm_temperature: float = 0.0
     dlm_audit_hmac_key: str
     # Id of the current audit HMAC key, stored on each row so keys can rotate.
@@ -43,6 +45,25 @@ class Settings(BaseSettings):
     cashctrl_api_base: str = ""
     cashctrl_api_key: str = ""
     cashctrl_webhook_secret: str = ""
+
+    # Accounting providers (multi-backend)
+    # The accounting backend is not hard-wired to CashCtrl: each tenant runs
+    # against a provider selected by name and executed from a pinned declarative
+    # spec (app/providers/specs/<name>.yaml). `default_accounting_provider` is the
+    # fallback when a tenant has no explicit binding. `accounting_provider_bindings`
+    # maps tenant_id -> provider name; parsed from env as JSON, e.g.
+    #   ACCOUNTING_PROVIDER_BINDINGS='{"<tenant-uuid>":"bexio"}'
+    # This is the settings-backed binding source; a DB-backed per-tenant binding
+    # table supersedes it later without touching the executor/registry (ADR 0002).
+    default_accounting_provider: str = "cashctrl"
+    accounting_provider_bindings: dict[str, str] = {}
+    # Per-tenant provider credentials: tenant_id -> {settings_attr: secret}, e.g.
+    #   ACCOUNTING_TENANT_CREDENTIALS='{"<tenant-uuid>":{"cashctrl_api_key":"..."}}'
+    # SECURITY: multi-tenant production MUST set these. With only the global
+    # cashctrl_api_key, every tenant shares one provider account — and therefore
+    # one data pool (cross-tenant exposure). Settings-backed interim; moves to
+    # encrypted DB rows with the binding table (ADR 0002).
+    accounting_tenant_credentials: dict[str, dict[str, str]] = {}
 
     # Auth
     jwt_algorithm: str = "HS256"
@@ -71,6 +92,23 @@ class Settings(BaseSettings):
                     "insecure secrets in production: "
                     + ", ".join(weak)
                     + " must be >=32 chars and not a placeholder"
+                )
+            # Multi-tenant credential isolation (Grok audit finding 9): every
+            # tenant explicitly bound to a provider must carry its own credentials
+            # in production, or all of them silently share one provider account
+            # (= one data pool). Tenants on the implicit default binding cannot be
+            # enumerated here — that residual risk is closed by the DB-backed
+            # binding table (ADR 0002).
+            uncredentialed = [
+                t
+                for t in self.accounting_provider_bindings
+                if not (self.accounting_tenant_credentials or {}).get(t)
+            ]
+            if uncredentialed:
+                raise ValueError(
+                    "accounting_provider_bindings without per-tenant credentials in "
+                    "production (shared provider account = cross-tenant data pool): "
+                    + ", ".join(sorted(uncredentialed))
                 )
         return self
 
