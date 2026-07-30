@@ -1,6 +1,6 @@
 # entrosana-ai
 
-> Audit-grade AI for back-office work.  Swiss-hosted, deterministic, built on CashCtrl.
+> Audit-grade AI for back-office work.  Swiss-hosted, tracable, built on CashCtrl.
 
 This is the FastAPI monolith powering [entrosana.com](https://entrosana.com).
 A single process organized into capability modules (accounting, admin,
