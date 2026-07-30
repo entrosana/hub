@@ -1,0 +1,62 @@
+# entrosana-ai CI
+#
+# Stages: lint -> test -> build.  All jobs target GitLab.com shared runners
+# until a self-hosted runner is wired (which won't be soon -- the EC2 is
+# busy with SYGNIF).
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  PYTHONUNBUFFERED: "1"
+
+default:
+  image: python:3.12-slim
+  cache:
+    key: pip-${CI_COMMIT_REF_SLUG}
+    paths:
+      - .cache/pip
+
+stages:
+  - lint
+  - test
+  - build
+
+lint:ruff:
+  stage: lint
+  before_script:
+    - pip install --quiet ruff
+  script:
+    - ruff check app tests
+    - ruff format --check app tests
+
+test:unit:
+  stage: test
+  services:
+    - name: postgres:16-alpine
+      alias: postgres
+    - name: redis:7-alpine
+      alias: redis
+  variables:
+    POSTGRES_DB: entrosana_test
+    POSTGRES_USER: entrosana
+    POSTGRES_PASSWORD: testpass
+    DATABASE_URL: "postgresql+asyncpg://entrosana:testpass@postgres/entrosana_test"
+    REDIS_URL: "redis://redis:6379/0"
+  before_script:
+    - pip install --quiet -e ".[dev]"
+  script:
+    - pytest --cov=app --cov-report=term-missing -v
+
+build:docker:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  script:
+    - docker build -t $CI_REGISTRY_IMAGE:latest -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA .
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker push $CI_REGISTRY_IMAGE:latest
+    - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+  # A broken image must fail the pipeline (was allow_failure:true, which let a
+  # non-building/broken image pass silently — audit L5).

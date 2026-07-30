@@ -1,0 +1,14 @@
+{
+  "bindings": {
+    "amount": "412.50",
+    "amt": "412.50",
+    "currency": "CHF",
+    "doc_type": "RECHNUNG"
+  },
+  "confidence": "0.90",
+  "dlm_fp": "bfca93a4e2a4dcd2831b745afd380958dc50bf64356f9f694dcefbaee4222d27",
+  "reasons": [
+    "iban_known:+0.100"
+  ],
+  "template_id": "QRBILL_STANDARD"
+}

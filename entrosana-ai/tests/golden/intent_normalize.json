@@ -1,0 +1,18 @@
+{
+  "  Pull   May payments of Anna M\u00fcller  ": {
+    "intent_hash": "28904eaeddb682dcad4d3444eb6fa9bed66c078f86536de0315a0e65c54abe17",
+    "normalized": "Pull May payments of Anna M\u00fcller"
+  },
+  "contact 4827": {
+    "intent_hash": "ed35de16daf6d3483f7e100554dd6d8a970009742ec3daed9d46c1442904b1c9",
+    "normalized": "contact 4827"
+  },
+  "payments from 01.05.2026 to 31.05.2026": {
+    "intent_hash": "5daec19862ec8d3cc2d3f981caf23d2593e7fde1091647296d1dece09add280b",
+    "normalized": "payments from 2026-05-01 to 2026-05-31"
+  },
+  "show me journal JE-2026-0445": {
+    "intent_hash": "742517834a1c0a85ef82fa289ea22bfd6d53d31bd9f3e7c9d18e7009c9b239a1",
+    "normalized": "show me journal JE-2026-0445"
+  }
+}

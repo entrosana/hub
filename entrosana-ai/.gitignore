@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Env files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Docker / runtime
+docker/data/
+*.log
+
+# Demo / POC artifacts (audit logs are generated, never committed)
+audit.jsonl
+audit-demo.jsonl
+
+# uv
+.python-version
+
+# Frontend scaffolding (preempt — we may add a UI later)
+node_modules/
+.next/
+.parcel-cache/
+
+# Alembic local artefacts
+migrations/versions/*.pyc

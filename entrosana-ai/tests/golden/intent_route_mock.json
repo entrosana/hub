@@ -1,0 +1,33 @@
+{
+  "  Pull   May payments of Anna M\u00fcller  ": {
+    "args": {
+      "contact_name": "Anna M\u00fcller",
+      "date_from": "2026-05-01",
+      "date_to": "2026-05-31"
+    },
+    "intent_hash": "28904eaeddb682dcad4d3444eb6fa9bed66c078f86536de0315a0e65c54abe17",
+    "tool": "journal.list"
+  },
+  "contact 4827": {
+    "args": {
+      "id": 4827
+    },
+    "intent_hash": "ed35de16daf6d3483f7e100554dd6d8a970009742ec3daed9d46c1442904b1c9",
+    "tool": "contact.lookup"
+  },
+  "payments from 01.05.2026 to 31.05.2026": {
+    "args": {
+      "date_from": "2026-05-01",
+      "date_to": "2026-05-31"
+    },
+    "intent_hash": "5daec19862ec8d3cc2d3f981caf23d2593e7fde1091647296d1dece09add280b",
+    "tool": "journal.list"
+  },
+  "show me journal JE-2026-0445": {
+    "args": {
+      "id": "JE-2026-0445"
+    },
+    "intent_hash": "742517834a1c0a85ef82fa289ea22bfd6d53d31bd9f3e7c9d18e7009c9b239a1",
+    "tool": "journal.get"
+  }
+}
