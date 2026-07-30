@@ -27,23 +27,17 @@ from pathlib import Path
 
 from app.providers.vocabulary import CANONICAL_OPS
 
-# Synonyms let the heuristic match vendor vocabulary to canonical ops. Extend
-# freely — this only affects author-time ranking, never runtime behaviour.
-_OBJECT_SYNONYMS: dict[str, set[str]] = {
-    "contact": {"contact", "person", "associate", "customer", "supplier", "party", "client"},
-    "journal": {
-        "journal",
-        "entry",
-        "entries",
-        "booking",
-        "bookings",
-        "ledger",
-        "transaction",
-        "transactions",
-        "voucher",
-        "posting",
-    },
-}
+# Synonyms let the heuristic match vendor vocabulary to canonical ops. The kernel
+# ships none: domain packs register their own object words. This only affects
+# author-time ranking, never runtime behaviour.
+OBJECT_SYNONYMS: dict[str, set[str]] = {}
+
+
+def register_object_synonyms(**objects: set[str]) -> None:
+    """Add object-word synonyms for a domain, e.g. ``contact={"person", ...}``."""
+
+    for name, words in objects.items():
+        OBJECT_SYNONYMS.setdefault(name, set()).update(words)
 _VERB_SYNONYMS: dict[str, set[str]] = {
     "lookup": {"lookup", "read", "get", "show", "find", "search", "detail", "retrieve"},
     "list": {"list", "index", "all", "search", "query", "browse"},
@@ -82,7 +76,7 @@ class Candidate:
 def _op_terms(op_name: str) -> tuple[set[str], set[str], str]:
     """(object synonyms, verb synonyms, verb) for a canonical op like 'journal.list'."""
     obj, _, verb = op_name.partition(".")
-    return _OBJECT_SYNONYMS.get(obj, {obj}), _VERB_SYNONYMS.get(verb, {verb}), verb
+    return OBJECT_SYNONYMS.get(obj, {obj}), _VERB_SYNONYMS.get(verb, {verb}), verb
 
 
 def _score(op_name: str, method: str, path: str, op_obj: dict) -> Candidate:

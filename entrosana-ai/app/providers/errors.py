@@ -58,3 +58,27 @@ class UnsupportedOperationError(ProviderError):
 
 class ExecutionError(ProviderError):
     """The provider call itself failed (transport, HTTP status, bad response)."""
+
+
+class ConfirmationRequiredError(ProviderError):
+    """A write was attempted without explicit confirmation.
+
+    The confirm discipline is enforced HERE, at the kernel boundary, not only by
+    whichever caller happens to sit in front of it: a future call path that skips
+    the dispatcher must not be able to write to a provider silently.
+    """
+
+    def __init__(self, op_name: str) -> None:
+        self.op_name = op_name
+        super().__init__(f"operation {op_name!r} is a mutation and requires explicit confirmation")
+
+
+class IdempotencyRequiredError(ProviderError):
+    """A binding declares an idempotency header but no key was supplied.
+
+    Without it a retried write can post twice — unacceptable for accounting.
+    """
+
+    def __init__(self, op_name: str) -> None:
+        self.op_name = op_name
+        super().__init__(f"operation {op_name!r} requires an idempotency key")

@@ -4,26 +4,58 @@ Loads every declarative spec once and answers two questions:
   * which provider does this tenant run on?  (``provider_for_tenant``)
   * give me its spec / an executor for it.   (``resolve`` / ``executor_for_tenant``)
 
-Binding source today is settings (``accounting_provider_bindings`` with a
-``default_accounting_provider`` fallback). The seam is deliberate: a DB-backed
-per-tenant binding table drops in behind ``provider_for_tenant`` later without the
-executor, specs, or dispatcher changing (ADR 0002).
+Which tenant runs on which provider is answered by a :class:`BindingSource`, not
+by the registry itself. The active domain pack installs one (the accounting pack
+reads it from settings); a DB-backed binding table drops in behind the same
+protocol later without the executor, specs, or dispatcher changing (ADR 0002).
 """
 
 from __future__ import annotations
 
+from typing import Protocol, runtime_checkable
 from uuid import UUID
 
-from app.core.config import settings
 from app.providers.errors import UnknownProviderError
 from app.providers.executor import ProviderExecutor
 from app.providers.spec import SPECS_DIR, ProviderSpec, load_all
 from app.providers.transport import Transport
 
 
+@runtime_checkable
+class BindingSource(Protocol):
+    """How a deployment answers 'which provider, and with which secrets?'."""
+
+    def provider_for_tenant(self, tenant_id: UUID | str) -> str: ...
+
+    def credentials_for_tenant(self, tenant_id: UUID | str) -> dict[str, str]: ...
+
+
+_binding_source: BindingSource | None = None
+
+
+def set_binding_source(source: BindingSource) -> None:
+    """Install the active binding source (called by the domain pack on import)."""
+
+    global _binding_source
+    _binding_source = source
+
+
+def get_binding_source() -> BindingSource:
+    if _binding_source is None:
+        raise UnknownProviderError(
+            "no binding source installed — import a domain pack (app.providers.domains.*)"
+        )
+    return _binding_source
+
+
 class ProviderRegistry:
-    def __init__(self, specs: dict[str, ProviderSpec] | None = None) -> None:
+    def __init__(
+        self,
+        specs: dict[str, ProviderSpec] | None = None,
+        binding: BindingSource | None = None,
+    ) -> None:
         self._specs = specs if specs is not None else load_all(SPECS_DIR)
+        self._binding = binding
 
     @property
     def providers(self) -> list[str]:
@@ -38,10 +70,12 @@ class ProviderRegistry:
     def capabilities(self, name: str) -> set[str]:
         return self.get(name).capabilities
 
+    def __init_binding__(self) -> BindingSource:  # pragma: no cover - trivial
+        return self._binding or get_binding_source()
+
     def provider_for_tenant(self, tenant_id: UUID | str) -> str:
-        """Name of the accounting provider bound to this tenant."""
-        bindings = settings.accounting_provider_bindings or {}
-        return bindings.get(str(tenant_id), settings.default_accounting_provider)
+        """Name of the provider bound to this tenant."""
+        return self.__init_binding__().provider_for_tenant(tenant_id)
 
     def resolve(self, tenant_id: UUID | str) -> ProviderSpec:
         """Spec for the tenant's provider (raises UnknownProviderError if the
@@ -51,7 +85,7 @@ class ProviderRegistry:
     def credentials_for_tenant(self, tenant_id: UUID | str) -> dict[str, str]:
         """Tenant-scoped secret overrides ({settings_attr: value}); empty dict
         falls back to global settings (single-tenant / dev only — see config)."""
-        return (settings.accounting_tenant_credentials or {}).get(str(tenant_id), {})
+        return self.__init_binding__().credentials_for_tenant(tenant_id)
 
     def executor_for_tenant(self, tenant_id: UUID | str, transport: Transport) -> ProviderExecutor:
         return ProviderExecutor(

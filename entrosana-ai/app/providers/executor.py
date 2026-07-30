@@ -19,13 +19,20 @@ the binding cannot honor all raise instead of producing plausible-but-wrong data
 from __future__ import annotations
 
 import base64
+import hashlib
+import json
 import re
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote
 
 from app.core.config import settings
-from app.providers.errors import ExecutionError, UnsupportedOperationError
+from app.providers.errors import (
+    ConfirmationRequiredError,
+    ExecutionError,
+    IdempotencyRequiredError,
+    UnsupportedOperationError,
+)
 from app.providers.spec import (
     AuthKind,
     AuthSpec,
@@ -36,13 +43,30 @@ from app.providers.spec import (
     ResponseMap,
 )
 from app.providers.transport import ProviderRequest, Transport
-from app.providers.vocabulary import ResultKind, get_op
+from app.providers.vocabulary import OpKind, ResultKind, get_op
 
 _MAX_PAGES = 100  # pagination backstop — never loop unbounded on a bad cursor
 _PLACEHOLDER = re.compile(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}")
 
 # Sentinel for a step that did not run (its when_arg was absent).
 _SKIPPED = object()
+
+
+def _fingerprint(value: Any) -> str:
+    """SHA-256 over canonical JSON (sorted keys, no whitespace, no NaN).
+
+    Deterministic by construction, so the same payload always fingerprints the same
+    and a stored hash stays checkable. Non-JSON input fails loudly rather than
+    producing a hash that cannot be reproduced.
+    """
+
+    try:
+        encoded = json.dumps(
+            value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
+        ).encode()
+    except (TypeError, ValueError) as exc:  # pragma: no cover - defensive
+        raise ExecutionError("provider result is not canonical JSON") from exc
+    return hashlib.sha256(encoded).hexdigest()
 
 
 class _EmptyShortCircuit(Exception):  # noqa: N818 — control-flow signal, not an error
@@ -57,6 +81,10 @@ class CanonicalResult:
     data: Any  # list[dict] | dict | None (per op.result kind)
     count: int  # rows for a list, 0/1 for an object
     raw: Any  # untouched provider response(s) — for audit/replay
+    # Content fingerprints over canonical JSON. Recording these in the signed audit
+    # row lets anyone later prove WHICH bytes were returned, not merely how many rows.
+    data_sha256: str
+    raw_sha256: str
 
 
 class ProviderExecutor:
@@ -78,20 +106,44 @@ class ProviderExecutor:
         self.transport = transport
         self._credential_overrides = credential_overrides or {}
 
-    async def execute(self, op_name: str, args: dict[str, Any]) -> CanonicalResult:
+    async def execute(
+        self,
+        op_name: str,
+        args: dict[str, Any],
+        *,
+        confirmed: bool = False,
+        idempotency_key: str | None = None,
+    ) -> CanonicalResult:
         op = get_op(op_name)  # canonical (raises UnknownOpError if not)
         binding = self.spec.operations.get(op_name)
         if binding is None:
             raise UnsupportedOperationError(self.spec.name, op_name)
 
+        # A write is refused at the kernel boundary unless the caller confirmed it.
+        if op.kind == OpKind.MUTATION and not confirmed:
+            raise ConfirmationRequiredError(op_name)
+
+        # If any binding declares an idempotency header, a key is mandatory — and it
+        # must be header-safe, so a caller-supplied value cannot inject a second header.
+        calls = binding.steps if binding.steps is not None else [binding.http]
+        if any(c is not None and c.idempotency_header for c in calls):
+            if not idempotency_key:
+                raise IdempotencyRequiredError(op_name)
+            if any(ord(ch) < 32 or ord(ch) == 127 for ch in idempotency_key):
+                raise ExecutionError("idempotency_key contains control characters")
+
         try:
             if binding.steps is not None:
                 self._reject_unconsumed_args(binding.steps, args, op_name)
-                raw_pages, items = await self._run_steps(binding.steps, args, op.result, op_name)
+                raw_pages, items = await self._run_steps(
+                    binding.steps, args, op.result, op_name, idempotency_key
+                )
             else:
                 assert binding.http is not None
                 self._reject_unconsumed_args([binding.http], args, op_name)
-                raw_pages, items = await self._run_http(binding.http, args, op.result, [], op_name)
+                raw_pages, items = await self._run_http(
+                    binding.http, args, op.result, [], op_name, idempotency_key
+                )
         except _EmptyShortCircuit:
             empty: Any = [] if op.result == ResultKind.LIST else None
             return CanonicalResult(
@@ -101,6 +153,8 @@ class ProviderExecutor:
                 data=empty,
                 count=0,
                 raw=None,
+                data_sha256=_fingerprint(empty),
+                raw_sha256=_fingerprint(None),
             )
 
         if op.result == ResultKind.LIST:
@@ -119,6 +173,8 @@ class ProviderExecutor:
             data=data,
             count=count,
             raw=raw,
+            data_sha256=_fingerprint(data),
+            raw_sha256=_fingerprint(raw),
         )
 
     # ── composite steps ───────────────────────────────────────────────────
@@ -129,6 +185,7 @@ class ProviderExecutor:
         args: dict[str, Any],
         result_kind: ResultKind,
         op_name: str,
+        idempotency_key: str | None = None,
     ) -> tuple[list[Any], list[dict[str, Any]]]:
         """Run resolution steps, then the final step whose response is the result.
 
@@ -155,7 +212,9 @@ class ProviderExecutor:
                 raise _EmptyShortCircuit(op_name)
             step_results.append(obj)
 
-        raw_pages, items = await self._run_http(steps[-1], args, result_kind, step_results, op_name)
+        raw_pages, items = await self._run_http(
+            steps[-1], args, result_kind, step_results, op_name, idempotency_key
+        )
         return all_raw + raw_pages, items
 
     # ── request building ──────────────────────────────────────────────────
@@ -167,6 +226,7 @@ class ProviderExecutor:
         result_kind: ResultKind,
         step_results: list[Any],
         op_name: str,
+        idempotency_key: str | None = None,
     ) -> tuple[list[Any], list[dict[str, Any]]]:
         """Send the request (following pagination for lists); return (raw_pages, mapped_items)."""
         base = self._base_url()
@@ -174,6 +234,8 @@ class ProviderExecutor:
         params = self._resolve_params(http.query, args, step_results)
         body = self._resolve_params(http.body, args, step_results) or None
         headers = self._auth_headers(self.spec.auth)
+        if http.idempotency_header and idempotency_key:
+            headers = {**headers, http.idempotency_header: idempotency_key}
 
         raw_pages: list[Any] = []
         items: list[dict[str, Any]] = []
