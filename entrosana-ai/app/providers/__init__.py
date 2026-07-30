@@ -10,3 +10,8 @@ is prose → canonical op + args.
 
 See ``docs/adr/0002-declarative-provider-specs.md``.
 """
+
+# Activate the domain packs this deployment speaks. Importing a pack registers its
+# canonical ops, its author-time synonyms, and its tenant→provider binding. The
+# kernel itself stays free of domain vocabulary.
+from app.providers.domains import accounting as _accounting  # noqa: E402,F401

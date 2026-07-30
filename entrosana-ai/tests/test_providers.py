@@ -32,10 +32,12 @@ def _cashctrl_executor() -> ProviderExecutor:
     return ProviderExecutor(spec, FakeCashCtrlTransport())
 
 
-async def _run(op: str, raw: dict):
+async def _run(op: str, raw: dict, *, confirmed: bool = False, idempotency_key: str | None = None):
     ex = _cashctrl_executor()
     vargs = validate_args(op, raw)
-    return await ex.execute(op, vargs.model_dump())
+    return await ex.execute(
+        op, vargs.model_dump(), confirmed=confirmed, idempotency_key=idempotency_key
+    )
 
 
 # ── spec loading & invariants ─────────────────────────────────────────────
@@ -125,6 +127,7 @@ async def test_journal_create_maps_body_and_response():
             "credit_account": 3000,
             "title": "Test",
         },
+        confirmed=True,
     )
     assert r.data["id"] == "JE-NEW-0001"  # canonical 'id' <- wire 'reference'
     assert r.data["debit_account"] == 1100  # canonical <- wire 'debitId'
@@ -612,3 +615,99 @@ def test_production_requires_per_tenant_credentials():
         accounting_provider_bindings={"t1": "cashctrl"},
         accounting_tenant_credentials={"t1": {"cashctrl_api_key": "k1" * 20}},
     )
+
+
+# ── kernel-level write gate + result fingerprints ─────────────────────────
+
+
+async def test_mutation_is_refused_without_confirmation():
+    """The confirm discipline lives in the kernel, not only in the dispatcher.
+
+    A caller that bypasses the dispatcher must not be able to write silently.
+    """
+
+    from app.providers.errors import ConfirmationRequiredError
+
+    with pytest.raises(ConfirmationRequiredError):
+        await _run(
+            "journal.create",
+            {
+                "date": "2026-06-10",
+                "amount": "99.00",
+                "debit_account": 1100,
+                "credit_account": 3000,
+                "title": "Unconfirmed",
+            },
+        )
+
+
+async def test_reads_need_no_confirmation():
+    r = await _run("journal.get", {"id": "JE-2026-0445"})
+    assert r.count == 1
+
+
+async def test_results_carry_reproducible_fingerprints():
+    a = await _run("journal.get", {"id": "JE-2026-0445"})
+    b = await _run("journal.get", {"id": "JE-2026-0445"})
+
+    assert len(a.data_sha256) == 64 and len(a.raw_sha256) == 64
+    # deterministic: same request, same bytes, same hash — the property that makes
+    # a stored fingerprint checkable later
+    assert a.data_sha256 == b.data_sha256
+    assert a.raw_sha256 == b.raw_sha256
+
+    other = await _run("journal.get", {"id": "JE-DOES-NOT-EXIST"})
+    assert other.data_sha256 != a.data_sha256
+
+
+async def test_empty_short_circuit_is_also_fingerprinted():
+    r = await _run("journal.list", {"contact_name": "Nobody At All"})
+    assert r.count == 0
+    assert len(r.data_sha256) == 64
+
+
+async def test_idempotency_key_is_required_and_header_safe():
+    """A binding that declares an idempotency header must not run without a key."""
+
+    from app.providers.errors import IdempotencyRequiredError
+    from app.providers.spec import HttpBinding
+
+    spec = ProviderRegistry().get("cashctrl")
+    binding = spec.operations["journal.create"]
+    call = binding.http or (binding.steps or [None])[-1]
+    patched = call.model_copy(update={"idempotency_header": "Idempotency-Key"})
+    op = binding.model_copy(update={"http": patched} if binding.http else {"steps": [patched]})
+    spec2 = spec.model_copy(update={"operations": {**spec.operations, "journal.create": op}})
+
+    ex = ProviderExecutor(spec2, FakeCashCtrlTransport())
+    args = validate_args(
+        "journal.create",
+        {
+            "date": "2026-06-10",
+            "amount": "99.00",
+            "debit_account": 1100,
+            "credit_account": 3000,
+            "title": "Test",
+        },
+    ).model_dump()
+
+    with pytest.raises(IdempotencyRequiredError):
+        await ex.execute("journal.create", args, confirmed=True)
+
+    with pytest.raises(ExecutionError, match="control characters"):
+        await ex.execute(
+            "journal.create", args, confirmed=True, idempotency_key="key\r\nX-Evil: 1"
+        )
+
+    ok = await ex.execute("journal.create", args, confirmed=True, idempotency_key="key-1")
+    assert ok.count == 1
+    assert HttpBinding is not None  # import used
+
+
+def test_header_name_on_idempotency_is_validated():
+    from pydantic import ValidationError
+
+    from app.providers.spec import HttpBinding
+
+    with pytest.raises(ValidationError):
+        HttpBinding(method="POST", path="/x", idempotency_header="Bad\r\nInjected: 1")

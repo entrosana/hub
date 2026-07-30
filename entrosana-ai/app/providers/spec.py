@@ -19,6 +19,7 @@ contact name to an id first, then list its entries (see ADR 0002).
 
 from __future__ import annotations
 
+import re
 from enum import Enum
 from pathlib import Path
 from typing import Any, Literal
@@ -117,6 +118,18 @@ class HttpBinding(BaseModel):
     # steps only: run this step ONLY when the named canonical arg is present.
     # Skipped steps yield nothing; prev-params referencing them fall back or omit.
     when_arg: str | None = None
+
+    # When set, this call carries the caller's idempotency key in the named header
+    # and the executor refuses to run without one.
+    idempotency_header: str | None = None
+
+    @model_validator(mode="after")
+    def _valid_idempotency_header(self) -> HttpBinding:
+        if self.idempotency_header is not None and not re.fullmatch(
+            r"[!#$%&\'*+\-.^_`|~0-9A-Za-z]+", self.idempotency_header
+        ):
+            raise ValueError("idempotency_header is not a valid HTTP header name")
+        return self
 
 
 class OperationBinding(BaseModel):
