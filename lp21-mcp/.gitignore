@@ -1,0 +1,28 @@
+# The index is a build product, not source. "python lp21.py index" retrieves it
+# from be.lehrplan.ch onto the local machine. Rights to that content belong to
+# the Erziehungsdirektion des Kantons Bern / D-EDK, not to entrosana, so it must
+# never be committed here.
+index.json
+ueberfachlich.json
+
+# "python lp21.py export" writes the same corpus as Markdown. Same reason.
+bestand/
+export/
+
+# The export command takes a free target name, so the two directories above are
+# not enough — "lp21.py export lehrplan-md" would slip past them and carry the
+# whole corpus into a commit. Everything Markdown is therefore ignored by
+# default and the documented files are named back in one by one. Add any new
+# documentation file here, deliberately.
+*.md
+!README.md
+!claude/README.md
+!LIESMICH.md
+
+# Raw fetched pages. lp21.py keeps its cache outside the script directory by
+# default; this catches the case where LP21_CACHE has been pointed in here.
+.lp21/
+*.html
+
+__pycache__/
+*.py[cod]
