@@ -24,3 +24,7 @@ class ChainVerificationResult(BaseModel):
     ok: bool
     events_checked: int
     first_bad_event_id: UUID | None = None
+
+
+class ChainCheckpointResult(BaseModel):
+    seq: int

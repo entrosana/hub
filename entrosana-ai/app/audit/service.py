@@ -24,7 +24,13 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.models import AuditChainHead, AuditEvent, DLMInteraction
+from app.audit.models import (
+    AuditChainCheckpoint,
+    AuditChainHead,
+    AuditEvent,
+    AuditEventArchive,
+    DLMInteraction,
+)
 from app.core.config import settings
 
 GENESIS = "GENESIS"
@@ -90,11 +96,7 @@ async def _lock_head(session: AsyncSession, tenant_id: UUID) -> AuditChainHead:
     (it is a no-op on SQLite, where the single connection already serialises;
     the UNIQUE(tenant_id, seq) constraint is the cross-dialect backstop).
     """
-    q = (
-        select(AuditChainHead)
-        .where(AuditChainHead.tenant_id == tenant_id)
-        .with_for_update()
-    )
+    q = select(AuditChainHead).where(AuditChainHead.tenant_id == tenant_id).with_for_update()
     head = (await session.execute(q)).scalar_one_or_none()
     if head is None:
         head = AuditChainHead(tenant_id=tenant_id, seq=0, head_hmac=GENESIS)
@@ -160,8 +162,25 @@ async def record(
     return event
 
 
-async def verify_chain(session: AsyncSession, tenant_id: UUID) -> tuple[bool, int, UUID | None]:
-    """Verify a tenant's chain end to end.
+def _event_payload(event: AuditEvent | AuditEventArchive) -> dict:
+    return _build_payload(
+        seq=event.seq,
+        tenant_id=event.tenant_id,
+        actor_id=event.actor_id,
+        action=event.action,
+        target_type=event.target_type,
+        target_id=event.target_id,
+        before=event.before_state,
+        after=event.after_state,
+        reasoning=event.reasoning,
+        ts_iso=event.created_at.replace(tzinfo=None).isoformat(),
+    )
+
+
+async def verify_chain(
+    session: AsyncSession, tenant_id: UUID, *, full: bool = False
+) -> tuple[bool, int, UUID | None]:
+    """Verify the tenant's chain, using a checkpoint unless ``full`` is set.
 
     Returns (ok, n_events, first_bad_event_id). `first_bad_event_id` is set when a
     specific row fails (bad signature / broken link / gap / unknown key); for a
@@ -169,55 +188,158 @@ async def verify_chain(session: AsyncSession, tenant_id: UUID) -> tuple[bool, in
     it is None while ok is False.
     """
     keyring = _keyring()
+    head = (
+        await session.execute(select(AuditChainHead).where(AuditChainHead.tenant_id == tenant_id))
+    ).scalar_one_or_none()
+    checkpoint = (
+        await session.execute(
+            select(AuditChainCheckpoint).where(AuditChainCheckpoint.tenant_id == tenant_id)
+        )
+    ).scalar_one_or_none()
+
+    if full or checkpoint is None:
+        archive_events = list(
+            (
+                await session.execute(
+                    select(AuditEventArchive)
+                    .where(AuditEventArchive.tenant_id == tenant_id)
+                    .order_by(AuditEventArchive.seq.asc())
+                )
+            ).scalars()
+        )
+        hot_events = list(
+            (
+                await session.execute(
+                    select(AuditEvent)
+                    .where(AuditEvent.tenant_id == tenant_id)
+                    .order_by(AuditEvent.seq.asc())
+                )
+            ).scalars()
+        )
+        events: list[AuditEvent | AuditEventArchive] = [*archive_events, *hot_events]
+        events.sort(key=lambda event: event.seq)
+        prev = GENESIS
+        expected_seq = 1
+        n = len(events)
+    else:
+        events = list(
+            (
+                await session.execute(
+                    select(AuditEvent)
+                    .where(
+                        AuditEvent.tenant_id == tenant_id,
+                        AuditEvent.seq > checkpoint.seq,
+                    )
+                    .order_by(AuditEvent.seq.asc())
+                )
+            ).scalars()
+        )
+        prev = checkpoint.hmac
+        expected_seq = checkpoint.seq + 1
+        n = checkpoint.seq + len(events)
+
+    last_seq = expected_seq - 1
+    last_hmac = prev
+    for event in events:
+        if event.seq != expected_seq:  # gap or reorder
+            return False, n, event.id
+        if event.prev_hmac != prev:  # broken chain link
+            return False, n, event.id
+        key = keyring.get(event.key_id)
+        if key is None:  # signed with an unknown/dropped key
+            return False, n, event.id
+        if _sign(prev, _event_payload(event), key) != event.hmac:
+            return False, n, event.id
+        prev = event.hmac
+        last_seq = event.seq
+        last_hmac = event.hmac
+        expected_seq += 1
+
+    if head is None:
+        return (n == 0), n, None  # events present but no anchor = anchor removed
+    if n != head.seq or last_seq != head.seq:
+        return False, n, None
+    if n > 0 and last_hmac != head.head_hmac:
+        return False, n, None
+    return True, n, None
+
+
+async def checkpoint_chain(session: AsyncSession, tenant_id: UUID) -> int:
+    """Persist a checkpoint only after the fast chain verification succeeds."""
+    ok, _n, first_bad = await verify_chain(session, tenant_id)
+    if not ok:
+        raise ValueError(f"cannot checkpoint invalid audit chain (first bad event: {first_bad})")
+
+    head = (
+        await session.execute(select(AuditChainHead).where(AuditChainHead.tenant_id == tenant_id))
+    ).scalar_one_or_none()
+    if head is None or head.seq == 0:
+        return 0
+
+    checkpoint = (
+        await session.execute(
+            select(AuditChainCheckpoint).where(AuditChainCheckpoint.tenant_id == tenant_id)
+        )
+    ).scalar_one_or_none()
+    if checkpoint is None:
+        checkpoint = AuditChainCheckpoint(
+            tenant_id=tenant_id,
+            seq=head.seq,
+            hmac=head.head_hmac,
+        )
+        session.add(checkpoint)
+    else:
+        checkpoint.seq = head.seq
+        checkpoint.hmac = head.head_hmac
+    await session.flush()
+    return checkpoint.seq
+
+
+async def archive_checkpointed(session: AsyncSession, tenant_id: UUID) -> int:
+    """Move events covered by the tenant's checkpoint to cold storage."""
+    checkpoint = (
+        await session.execute(
+            select(AuditChainCheckpoint).where(AuditChainCheckpoint.tenant_id == tenant_id)
+        )
+    ).scalar_one_or_none()
+    if checkpoint is None:
+        raise ValueError("cannot archive audit events without a checkpoint")
+
     events = list(
         (
             await session.execute(
                 select(AuditEvent)
-                .where(AuditEvent.tenant_id == tenant_id)
+                .where(
+                    AuditEvent.tenant_id == tenant_id,
+                    AuditEvent.seq <= checkpoint.seq,
+                )
                 .order_by(AuditEvent.seq.asc())
             )
         ).scalars()
     )
-    head = (
-        await session.execute(
-            select(AuditChainHead).where(AuditChainHead.tenant_id == tenant_id)
+    for event in events:
+        session.add(
+            AuditEventArchive(
+                id=event.id,
+                tenant_id=event.tenant_id,
+                seq=event.seq,
+                actor_id=event.actor_id,
+                action=event.action,
+                target_type=event.target_type,
+                target_id=event.target_id,
+                before_state=event.before_state,
+                after_state=event.after_state,
+                reasoning=event.reasoning,
+                prev_hmac=event.prev_hmac,
+                hmac=event.hmac,
+                key_id=event.key_id,
+                created_at=event.created_at,
+                updated_at=event.updated_at,
+            )
         )
-    ).scalar_one_or_none()
-
-    prev = GENESIS
-    for i, e in enumerate(events, start=1):
-        if e.seq != i:  # gap or reorder
-            return False, len(events), e.id
-        if e.prev_hmac != prev:  # broken chain link
-            return False, len(events), e.id
-        key = keyring.get(e.key_id)
-        if key is None:  # signed with an unknown/dropped key
-            return False, len(events), e.id
-        payload = _build_payload(
-            seq=e.seq,
-            tenant_id=e.tenant_id,
-            actor_id=e.actor_id,
-            action=e.action,
-            target_type=e.target_type,
-            target_id=e.target_id,
-            before=e.before_state,
-            after=e.after_state,
-            reasoning=e.reasoning,
-            ts_iso=e.created_at.replace(tzinfo=None).isoformat(),
-        )
-        if _sign(prev, payload, key) != e.hmac:  # tampered payload/signature
-            return False, len(events), e.id
-        prev = e.hmac
-
-    n = len(events)
-    # Anchor check — this is what makes tail-truncation detectable.
-    if head is None:
-        return (n == 0), n, None  # events present but no anchor = anchor removed
-    if n != head.seq:  # rows deleted from the tail (or count mismatch)
-        return False, n, None
-    if n > 0 and prev != head.head_hmac:  # final hmac must match the anchor
-        return False, n, None
-    return True, n, None
+        await session.delete(event)
+    await session.flush()
+    return len(events)
 
 
 async def record_dlm(
