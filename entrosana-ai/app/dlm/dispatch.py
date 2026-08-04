@@ -164,7 +164,7 @@ async def dispatch_query(
 
     # Phase 2 — execute against the resolved provider (source of fact).
     transport = transport or HttpxTransport()
-    executor = registry.executor_for_tenant(principal.tenant_id, transport)
+    executor = await registry.executor_for_tenant(principal.tenant_id, transport, session=session)
     cres = await executor.execute(routed.tool, vargs.model_dump())
 
     # Phase 3 — sign the outcome + the pinned DLMInteraction row (M4).

@@ -64,6 +64,10 @@ class Settings(BaseSettings):
     # one data pool (cross-tenant exposure). Settings-backed interim; moves to
     # encrypted DB rows with the binding table (ADR 0002).
     accounting_tenant_credentials: dict[str, dict[str, str]] = {}
+    # Optional key to encrypt at-rest tenant credentials. If unset, `secret_key`
+    # is used (backwards-compatible for existing deployments; dedicated key is
+    # recommended so credential rotation does not force JWT re-issuance).
+    tenant_credential_encryption_key: str | None = None
 
     # Auth
     jwt_algorithm: str = "HS256"
