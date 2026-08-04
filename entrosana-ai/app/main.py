@@ -17,6 +17,7 @@ from app.core.auth import get_current_principal, require_role
 from app.core.config import settings
 from app.core.exceptions import add_exception_handlers
 from app.core.logging import configure_logging
+from app.core.middleware import CorrelationIdMiddleware
 from app.core.tracing import setup_tracing
 from app.dlm.runner import close_anthropic_client
 from app.documents.router import router as documents_router
@@ -57,6 +58,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(CorrelationIdMiddleware)
 
 
 @app.get("/health", tags=["meta"])
