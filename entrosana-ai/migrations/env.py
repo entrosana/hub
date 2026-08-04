@@ -22,6 +22,7 @@ from app.signup import models as _si  # noqa: F401
 from app.addresses import models as _add  # noqa: F401
 from app.billing import models as _b  # noqa: F401
 from app.documents import models as _d  # noqa: F401
+from app.providers import models as _p  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url.replace("+asyncpg", ""))
