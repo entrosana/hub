@@ -24,3 +24,18 @@ class PersonOut(BaseModel):
     kind: str
     email: str | None
     created_at: datetime
+
+
+class ProviderCredentialIn(BaseModel):
+    provider_name: str
+    setting_name: str
+    value: str
+
+
+class ProviderCredentialName(BaseModel):
+    provider_name: str
+    setting_name: str
+
+
+class ProviderCredentialSetOut(ProviderCredentialName):
+    rotated: bool
