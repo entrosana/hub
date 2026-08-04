@@ -8,6 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit import service as audit
 from app.billing.models import Invoice
 from app.core.crud import create_for_tenant
+from app.core.validation import (
+    require_currency,
+    require_non_empty,
+    require_not_before,
+    require_positive_amount,
+)
 
 
 async def issue_invoice(
@@ -22,6 +28,16 @@ async def issue_invoice(
     issued_on: date,
     due_on: date,
 ) -> Invoice:
+    number = require_non_empty(number, "number")
+    family_id = require_non_empty(family_id, "family_id")
+    amount_cents = require_positive_amount(amount_cents)
+    currency = require_currency(currency)
+    require_not_before(
+        due_on,
+        issued_on,
+        earlier_field="issued_on",
+        later_field="due_on",
+    )
     invoice = await create_for_tenant(
         db,
         Invoice,

@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.addresses.models import Address
 from app.audit import service as audit
 from app.core.crud import create_for_tenant
+from app.core.validation import require_country, require_non_empty
 
 
 async def register_address(
@@ -20,6 +21,10 @@ async def register_address(
     city: str,
     country: str = "CH",
 ) -> Address:
+    line1 = require_non_empty(line1, "line1")
+    postcode = require_non_empty(postcode, "postcode")
+    city = require_non_empty(city, "city")
+    country = require_country(country)
     address = await create_for_tenant(
         db,
         Address,

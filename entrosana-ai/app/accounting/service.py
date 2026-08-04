@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.accounting.models import Entry
 from app.audit import service as audit
 from app.core.crud import create_for_tenant
+from app.core.validation import require_currency, require_non_empty, require_positive_amount
 
 
 async def propose_entry(
@@ -20,6 +21,9 @@ async def propose_entry(
 ) -> Entry:
     """Create a booking-proposal entry. Status starts at 'proposed' and
     needs explicit approval before it gets pushed to CashCtrl."""
+    description = require_non_empty(description, "description")
+    amount_cents = require_positive_amount(amount_cents)
+    currency = require_currency(currency)
     entry = await create_for_tenant(
         db,
         Entry,
