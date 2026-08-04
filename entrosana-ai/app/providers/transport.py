@@ -19,6 +19,44 @@ import httpx
 
 from app.providers.errors import ExecutionError
 
+# Shared, lazily-created async HTTP client.  Reusing one client keeps the
+# underlying connection pool warm and avoids per-call TCP/TLS overhead.
+_HTTP_CLIENT: httpx.AsyncClient | None = None
+
+
+def _http_limits() -> httpx.Limits:
+    """Connection pool limits for the shared client.
+
+    Defaults match httpx's defaults but are explicit so they can be tuned.
+    """
+    return httpx.Limits(max_keepalive_connections=20, max_connections=100)
+
+
+def get_http_client() -> httpx.AsyncClient:
+    """Return the shared ``httpx.AsyncClient``.
+
+    The first call creates it; subsequent calls reuse the same pool.  The
+    caller MUST NOT close this client directly — use :func:`close_http_client`
+    during application shutdown.
+    """
+    global _HTTP_CLIENT
+    if _HTTP_CLIENT is None:
+        _HTTP_CLIENT = httpx.AsyncClient(
+            limits=_http_limits(),
+            # HTTP/2 requires the optional ``h2`` package; enable only when it
+            # is added to the dependency set.  Keep-alive + pooling still apply.
+            http2=False,
+        )
+    return _HTTP_CLIENT
+
+
+async def close_http_client() -> None:
+    """Close the shared HTTP client.  Call this once on application shutdown."""
+    global _HTTP_CLIENT
+    if _HTTP_CLIENT is not None:
+        await _HTTP_CLIENT.aclose()
+        _HTTP_CLIENT = None
+
 
 @dataclass(frozen=True, slots=True)
 class ProviderRequest:
@@ -40,27 +78,28 @@ class Transport(Protocol):
 
 
 class HttpxTransport:
-    """Real HTTP transport. Creates a short-lived client per call.
+    """Real HTTP transport backed by a shared ``httpx.AsyncClient`` pool."""
 
-    (A pooled client is a later optimization; per-call keeps lifecycle trivially
-    correct and there is no shared mutable state to leak between tenants.)
-    """
-
-    def __init__(self, timeout: float = 15.0) -> None:
+    def __init__(
+        self,
+        client: httpx.AsyncClient | None = None,
+        timeout: float = 15.0,
+    ) -> None:
+        self._client = client or get_http_client()
         self._timeout = timeout
 
     async def send(self, req: ProviderRequest) -> Any:
         try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
-                resp = await client.request(
-                    req.method,
-                    req.url,
-                    headers=req.headers or None,
-                    params=req.params or None,
-                    json=req.json,
-                )
-                resp.raise_for_status()
-                return resp.json()
+            resp = await self._client.request(
+                req.method,
+                req.url,
+                headers=req.headers or None,
+                params=req.params or None,
+                json=req.json,
+                timeout=self._timeout,
+            )
+            resp.raise_for_status()
+            return resp.json()
         except httpx.HTTPError as e:
             raise ExecutionError(f"transport error calling {req.method} {req.url}: {e}") from e
         except ValueError as e:  # non-JSON body

@@ -7,20 +7,13 @@ the verified token. Queries execute; mutations return a preview (never auto-appl
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assistant.schemas import AssistantQueryIn, AssistantQueryOut
 from app.core.auth import Principal, get_current_principal
 from app.core.dependencies import get_accounting_transport, get_db
 from app.dlm.dispatch import dispatch_query
-from app.providers.errors import (
-    ArgValidationError,
-    ExecutionError,
-    UnknownOpError,
-    UnknownProviderError,
-    UnsupportedOperationError,
-)
 from app.providers.transport import Transport
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
@@ -33,22 +26,7 @@ async def assistant_query(
     db: AsyncSession = Depends(get_db),
     transport: Transport = Depends(get_accounting_transport),
 ) -> AssistantQueryOut:
-    try:
-        res = await dispatch_query(db, principal, body.input, transport=transport)
-    except (UnknownOpError, ArgValidationError) as e:
-        # grammar cage rejected the routed tool / args — nothing executed.
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
-    except UnsupportedOperationError as e:
-        # valid op, but this tenant's provider does not implement it.
-        raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, detail=str(e)) from e
-    except UnknownProviderError as e:
-        # tenant bound to a provider with no spec — a configuration error.
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)) from e
-    except ExecutionError as e:
-        # the upstream accounting API call failed. (If this was a query, the
-        # signed query.requested row is already committed — the trail shows an
-        # execution whose outcome row is absent, which is the honest state.)
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail=str(e)) from e
+    res = await dispatch_query(db, principal, body.input, transport=transport)
 
     # dispatch_query owns persistence (two-phase signed audit) — no commit here.
     return AssistantQueryOut(
