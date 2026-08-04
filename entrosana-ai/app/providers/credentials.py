@@ -119,3 +119,43 @@ async def set_tenant_credentials(
         await set_tenant_credential(db, tenant_id, provider_name, name, value)
         for name, value in credentials.items()
     ]
+
+
+async def list_tenant_credential_names(
+    db: AsyncSession, tenant_id: UUID | str
+) -> list[tuple[str, str]]:
+    """Return (provider_name, setting_name) pairs for a tenant — never values."""
+    result = await db.execute(
+        select(
+            TenantProviderCredential.provider_name,
+            TenantProviderCredential.setting_name,
+        )
+        .where(TenantProviderCredential.tenant_id == tenant_id)
+        .order_by(
+            TenantProviderCredential.provider_name,
+            TenantProviderCredential.setting_name,
+        )
+    )
+    return [(row.provider_name, row.setting_name) for row in result.all()]
+
+
+async def delete_tenant_credential(
+    db: AsyncSession,
+    tenant_id: UUID | str,
+    provider_name: str,
+    setting_name: str,
+) -> bool:
+    """Revoke one credential. Returns True if a row was removed."""
+    result = await db.execute(
+        select(TenantProviderCredential).where(
+            TenantProviderCredential.tenant_id == tenant_id,
+            TenantProviderCredential.provider_name == provider_name,
+            TenantProviderCredential.setting_name == setting_name,
+        )
+    )
+    existing = result.scalar_one_or_none()
+    if existing is None:
+        return False
+    await db.delete(existing)
+    await db.flush()
+    return True
