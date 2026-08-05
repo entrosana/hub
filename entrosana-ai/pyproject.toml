@@ -68,16 +68,8 @@ ignore = ["E501", "S101", "B008", "UP042", "S603", "S607"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 
-[tool.coverage.run]
-omit = [
-    "app/cashctrl/client.py",
-    "app/dlm/base/cashctrl.py",
-    "app/dlm/base/verify_replay.py",
-    "app/dlm/demo_intent.py",
-    "app/tasks/*",
-]
-
 [dependency-groups]
 dev = [
     "types-pyyaml>=6.0.12.20260518",
 ]
+

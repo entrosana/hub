@@ -10,11 +10,11 @@ from sqlalchemy import select
 
 from app.audit.models import AuditEvent
 from app.core.config import settings
-from app.core.validation import ValidationError
 from app.identity import service as identity_service
 from app.providers import bindings
 from app.providers.credentials import get_tenant_credentials, set_tenant_credential
 from app.providers.domains.accounting import FallbackBindingSource
+from app.providers.errors import UnknownProviderError
 from app.providers.fake import FakeCashCtrlTransport
 from app.providers.registry import get_registry
 
@@ -41,9 +41,8 @@ async def test_binding_repository_upserts_versions_and_deletes(db):
 
 
 async def test_binding_repository_rejects_unknown_provider(db):
-    with pytest.raises(ValidationError, match="unknown provider") as exc_info:
+    with pytest.raises(UnknownProviderError):
         await bindings.set_tenant_binding(db, uuid4(), "not-a-provider")
-    assert exc_info.value.field == "provider"
 
 
 async def test_binding_source_prefers_db_then_settings_then_default(db, monkeypatch):
@@ -176,4 +175,4 @@ async def test_admin_binding_api_rejects_unknown_provider(db, client):
         json={"provider": "invalid"},
     )
     assert response.status_code == 422
-    assert response.json()["field"] == "provider"
+    assert response.json()["detail"] == "unknown provider: invalid"

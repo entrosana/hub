@@ -17,6 +17,7 @@ from app.providers.bindings import (
     get_tenant_binding,
     set_tenant_binding,
 )
+from app.providers.registry import get_registry
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -82,6 +83,11 @@ async def set_provider_binding(
     actor_id: str = Depends(get_actor_id),
     db: AsyncSession = Depends(get_db),
 ):
+    if payload.provider not in get_registry().providers:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"unknown provider: {payload.provider}",
+        )
     old_provider = await get_tenant_binding(db, tenant_id)
     binding = await set_tenant_binding(db, tenant_id, payload.provider)
     await audit.record(

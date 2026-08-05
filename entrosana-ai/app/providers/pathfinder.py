@@ -38,8 +38,6 @@ def register_object_synonyms(**objects: set[str]) -> None:
 
     for name, words in objects.items():
         OBJECT_SYNONYMS.setdefault(name, set()).update(words)
-
-
 _VERB_SYNONYMS: dict[str, set[str]] = {
     "lookup": {"lookup", "read", "get", "show", "find", "search", "detail", "retrieve"},
     "list": {"list", "index", "all", "search", "query", "browse"},

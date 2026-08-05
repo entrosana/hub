@@ -13,7 +13,6 @@ from fastapi.exceptions import HTTPException
 from fastapi.responses import JSONResponse
 
 from app.core.logging import log
-from app.core.validation import ValidationError
 from app.providers.errors import (
     ArgValidationError,
     ConfirmationRequiredError,
@@ -122,17 +121,8 @@ async def catchall_exception_handler(request: Request, exc: Exception) -> JSONRe
     )
 
 
-async def validation_error_handler(request: Request, exc: Exception) -> JSONResponse:
-    assert isinstance(exc, ValidationError)
-    return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-        content={"detail": str(exc), "field": exc.field},
-    )
-
-
 def add_exception_handlers(app: FastAPI) -> None:
     """Register all centralized exception handlers on ``app``."""
     app.add_exception_handler(ProviderError, provider_error_handler)
-    app.add_exception_handler(ValidationError, validation_error_handler)
     app.add_exception_handler(HTTPException, http_exception_handler)
     app.add_exception_handler(Exception, catchall_exception_handler)

@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.validation import ValidationError
+from app.providers.errors import UnknownProviderError
 from app.providers.models import TenantProviderBinding
 from app.providers.registry import get_registry
 
@@ -25,7 +25,7 @@ async def set_tenant_binding(
 ) -> TenantProviderBinding:
     """Validate and upsert a tenant's active provider binding."""
     if provider_name not in get_registry().providers:
-        raise ValidationError(f"unknown provider: {provider_name}", field="provider")
+        raise UnknownProviderError(provider_name)
 
     result = await db.execute(
         select(TenantProviderBinding).where(TenantProviderBinding.tenant_id == tenant_id)
