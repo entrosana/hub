@@ -33,6 +33,8 @@ from app.dlm.output import parse_tool_call
 class ToolCall:
     tool: str
     args: dict
+    tokens_in: int = 0
+    tokens_out: int = 0
 
 
 class IntentRouter(Protocol):
@@ -149,7 +151,13 @@ class ClaudeRouter:
             "intent_route",
             {"user_input": ci.normalized, "intent_hash": ci.intent_hash},
         )
-        return _parse_tool_call(result["output"])
+        parsed = _parse_tool_call(result["output"])
+        return ToolCall(
+            tool=parsed.tool,
+            args=parsed.args,
+            tokens_in=result.get("tokens_in", 0),
+            tokens_out=result.get("tokens_out", 0),
+        )
 
 
 def _parse_tool_call(text: str) -> ToolCall:

@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, ClassVar, Self
+from typing import Any, ClassVar, Self, cast
 
 from app.dlm.base.core import DLM, Agent, Decision, Features, Verifier, audit_chain
 from app.dlm.base.env_fingerprint import RuntimeFingerprint
@@ -26,6 +26,8 @@ class RoutedIntent:
     canonical: CanonicalIntent
     tool: str
     args: dict[str, Any]
+    tokens_in: int = 0
+    tokens_out: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,7 +63,7 @@ class DLMGateway:
             cls._instance = cls(router)
         elif router is not None:
             cls._instance._router = router
-        return cls._instance
+        return cast(Self, cls._instance)
 
     @classmethod
     def reset(cls) -> None:
@@ -104,6 +106,8 @@ class DLMGateway:
             canonical=ci,
             tool=tc.tool,
             args=dict(sorted(tc.args.items())) if tc.args else {},
+            tokens_in=tc.tokens_in,
+            tokens_out=tc.tokens_out,
         )
 
     async def run_llm(

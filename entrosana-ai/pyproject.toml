@@ -29,6 +29,7 @@ dependencies = [
     "pyjwt>=2.8",
     "bcrypt<4.1",
     "pyyaml>=6.0.3",
+    "prometheus-client>=0.20",
 ]
 
 [project.optional-dependencies]
@@ -72,4 +73,3 @@ testpaths = ["tests"]
 dev = [
     "types-pyyaml>=6.0.12.20260518",
 ]
-

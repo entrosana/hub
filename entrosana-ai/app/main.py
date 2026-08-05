@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 
 from app.accounting.router import router as accounting_router
 from app.addresses.router import router as addresses_router
@@ -13,11 +14,12 @@ from app.audit.router import router as audit_router
 from app.auth.router import router as auth_router
 from app.billing.router import router as billing_router
 from app.contracts.router import router as contracts_router
+from app.core import metrics
 from app.core.auth import get_current_principal, require_role
 from app.core.config import settings
 from app.core.exceptions import add_exception_handlers
 from app.core.logging import configure_logging
-from app.core.middleware import CorrelationIdMiddleware
+from app.core.middleware import CorrelationIdMiddleware, MetricsMiddleware
 from app.core.tracing import setup_tracing
 from app.dlm.runner import close_anthropic_client
 from app.documents.router import router as documents_router
@@ -59,12 +61,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(CorrelationIdMiddleware)
+app.add_middleware(MetricsMiddleware)
 
 
 @app.get("/health", tags=["meta"])
 async def health():
     """Liveness probe -- used by Docker HEALTHCHECK + load balancer."""
     return {"status": "ok", "service": "entrosana-ai", "version": settings.api_version}
+
+
+@app.get("/metrics", tags=["meta"])
+async def metrics_endpoint():
+    if not settings.metrics_enabled:
+        return Response(status_code=404)
+    body, content_type = metrics.render_latest()
+    return Response(content=body, media_type=content_type)
 
 
 # Mount module routers under /api/v1

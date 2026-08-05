@@ -1,5 +1,6 @@
 """Request middleware for cross-cutting request context."""
 
+import time
 from uuid import uuid4
 
 import structlog
@@ -7,6 +8,9 @@ from opentelemetry import trace
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
+
+from app.core import metrics
+from app.core.config import settings
 
 
 class CorrelationIdMiddleware(BaseHTTPMiddleware):
@@ -31,3 +35,30 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
             return response
         finally:
             structlog.contextvars.clear_contextvars()
+
+
+class MetricsMiddleware(BaseHTTPMiddleware):
+    """Record request count and duration using matched route templates."""
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        if not settings.metrics_enabled:
+            return await call_next(request)
+
+        started = time.perf_counter()
+        status_code = 500
+        try:
+            response = await call_next(request)
+            status_code = response.status_code
+            return response
+        finally:
+            route = request.scope.get("route")
+            route_template = getattr(route, "path", None) or "unmatched"
+            metrics.http_requests_total.labels(
+                method=request.method,
+                route=route_template,
+                status=str(status_code),
+            ).inc()
+            metrics.http_request_duration_seconds.labels(
+                method=request.method,
+                route=route_template,
+            ).observe(time.perf_counter() - started)

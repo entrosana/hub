@@ -77,6 +77,7 @@ class Settings(BaseSettings):
     # Observability
     otel_exporter_otlp_endpoint: str = ""
     otel_service_name: str = "entrosana-ai"
+    metrics_enabled: bool = True
 
     @model_validator(mode="after")
     def _validate_secrets(self) -> "Settings":

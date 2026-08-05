@@ -31,6 +31,7 @@ from app.audit.models import (
     AuditEventArchive,
     DLMInteraction,
 )
+from app.core import metrics
 from app.core.config import settings
 
 GENESIS = "GENESIS"
@@ -159,6 +160,7 @@ async def record(
     head.seq = seq
     head.head_hmac = sig
     await session.flush()
+    metrics.observe_audit(action)
     return event
 
 

@@ -35,6 +35,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import service as audit
+from app.core import metrics
 from app.core.auth import Principal
 from app.core.config import settings
 from app.dlm.gateway import DLMGateway
@@ -137,7 +138,7 @@ async def dispatch_query(
         )
         await audit.record_dlm(session, audit_event_id=event.id, **_dlm_kwargs())
         await session.commit()
-        return AssistantResult(
+        result = AssistantResult(
             tool=routed.tool,
             args=args_out,
             kind="mutation",
@@ -148,6 +149,14 @@ async def dispatch_query(
             result=None,
             summary=_preview_summary(routed.tool, args_out),
         )
+        metrics.observe_dlm(
+            tool=routed.tool,
+            kind="mutation",
+            executed=False,
+            tokens_in=routed.tokens_in,
+            tokens_out=routed.tokens_out,
+        )
+        return result
 
     # Query path, phase 1 — commit the signed intent BEFORE touching the provider,
     # so an executed read can never end up with zero committed audit trail.
@@ -165,7 +174,12 @@ async def dispatch_query(
     # Phase 2 — execute against the resolved provider (source of fact).
     transport = transport or HttpxTransport()
     executor = await registry.executor_for_tenant(principal.tenant_id, transport, session=session)
-    cres = await executor.execute(routed.tool, vargs.model_dump())
+    try:
+        cres = await executor.execute(routed.tool, vargs.model_dump())
+    except Exception:
+        metrics.observe_provider_call(spec.name, routed.tool, "error")
+        raise
+    metrics.observe_provider_call(spec.name, routed.tool, "success")
 
     # Phase 3 — sign the outcome + the pinned DLMInteraction row (M4).
     event = await audit.record(
@@ -185,7 +199,7 @@ async def dispatch_query(
     await audit.record_dlm(session, audit_event_id=event.id, **_dlm_kwargs())
     await session.commit()
 
-    return AssistantResult(
+    result = AssistantResult(
         tool=routed.tool,
         args=args_out,
         kind="query",
@@ -196,6 +210,14 @@ async def dispatch_query(
         result=cres.data,
         summary="",
     )
+    metrics.observe_dlm(
+        tool=routed.tool,
+        kind="query",
+        executed=True,
+        tokens_in=routed.tokens_in,
+        tokens_out=routed.tokens_out,
+    )
+    return result
 
 
 def _preview_summary(tool: str, args: dict[str, Any]) -> str:
