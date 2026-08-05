@@ -19,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.providers.bindings import get_tenant_binding
 from app.providers.models import TenantProviderCredential
 
 _KEY_INFO = b"tenant-credential@entrosana.ai"
@@ -49,14 +50,17 @@ def decrypt_credential(token: str) -> str:
     return _fernet().decrypt(token.encode()).decode()
 
 
-def _provider_for_tenant(tenant_id: UUID | str) -> str:
-    """Resolve the effective provider for a tenant from settings.
+async def _provider_for_tenant(db: AsyncSession, tenant_id: UUID | str) -> str:
+    """Resolve the effective provider for a tenant from DB first, then settings.
 
     This mirrors the logic in `FallbackBindingSource` while staying free of
     an async dependency so the encryption helpers can be reused easily.
     """
-    bindings = settings.accounting_provider_bindings or {}
-    return bindings.get(str(tenant_id), settings.default_accounting_provider)
+    db_provider = await get_tenant_binding(db, tenant_id)
+    if db_provider is not None:
+        return db_provider
+    configured = settings.accounting_provider_bindings or {}
+    return configured.get(str(tenant_id), settings.default_accounting_provider)
 
 
 async def get_tenant_credentials(db: AsyncSession, tenant_id: UUID | str) -> dict[str, str]:
@@ -65,7 +69,7 @@ async def get_tenant_credentials(db: AsyncSession, tenant_id: UUID | str) -> dic
     If no DB row exists an empty dict is returned; the executor will fall back
     to per-tenant or global settings secrets.
     """
-    provider_name = _provider_for_tenant(tenant_id)
+    provider_name = await _provider_for_tenant(db, tenant_id)
     result = await db.execute(
         select(TenantProviderCredential).where(
             TenantProviderCredential.tenant_id == tenant_id,

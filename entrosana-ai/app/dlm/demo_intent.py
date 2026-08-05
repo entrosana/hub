@@ -110,7 +110,7 @@ async def run_demo(
     #    the executor fails closed on unset secrets, and the fake ignores auth.
     registry = ProviderRegistry()
     executor = ProviderExecutor(
-        registry.resolve(tenant_id),
+        await registry.resolve(tenant_id),
         FakeCashCtrlTransport(),
         credential_overrides={
             "cashctrl_api_key": "demo-offline-key",

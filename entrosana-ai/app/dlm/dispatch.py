@@ -95,7 +95,9 @@ async def dispatch_query(
 
     # Resolve + capability-check for BOTH kinds, so a misconfigured tenant or an
     # incapable provider fails as loudly on a mutation preview as on a read.
-    spec = registry.resolve(principal.tenant_id)  # raises UnknownProviderError
+    spec = await registry.resolve(
+        principal.tenant_id, session=session
+    )  # raises UnknownProviderError
     if not spec.supports(routed.tool):
         raise UnsupportedOperationError(spec.name, routed.tool)
     model_version, prompt_version = _router_versions(gw)

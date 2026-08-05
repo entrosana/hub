@@ -27,7 +27,9 @@ from app.providers.transport import Transport
 class BindingSource(Protocol):
     """How a deployment answers 'which provider, and with which secrets?'."""
 
-    def provider_for_tenant(self, tenant_id: UUID | str) -> str: ...
+    async def provider_for_tenant(
+        self, tenant_id: UUID | str, session: AsyncSession | None = None
+    ) -> str: ...
 
     async def credentials_for_tenant(
         self, tenant_id: UUID | str, session: AsyncSession | None = None
@@ -77,14 +79,18 @@ class ProviderRegistry:
     def __init_binding__(self) -> BindingSource:  # pragma: no cover - trivial
         return self._binding or get_binding_source()
 
-    def provider_for_tenant(self, tenant_id: UUID | str) -> str:
+    async def provider_for_tenant(
+        self, tenant_id: UUID | str, session: AsyncSession | None = None
+    ) -> str:
         """Name of the provider bound to this tenant."""
-        return self.__init_binding__().provider_for_tenant(tenant_id)
+        return await self.__init_binding__().provider_for_tenant(tenant_id, session)
 
-    def resolve(self, tenant_id: UUID | str) -> ProviderSpec:
+    async def resolve(
+        self, tenant_id: UUID | str, session: AsyncSession | None = None
+    ) -> ProviderSpec:
         """Spec for the tenant's provider (raises UnknownProviderError if the
         bound/default provider has no spec — a config error, surfaced loudly)."""
-        return self.get(self.provider_for_tenant(tenant_id))
+        return self.get(await self.provider_for_tenant(tenant_id, session))
 
     async def credentials_for_tenant(
         self, tenant_id: UUID | str, session: AsyncSession | None = None
@@ -97,7 +103,7 @@ class ProviderRegistry:
         self, tenant_id: UUID | str, transport: Transport, session: AsyncSession | None = None
     ) -> ProviderExecutor:
         return ProviderExecutor(
-            self.resolve(tenant_id),
+            await self.resolve(tenant_id, session),
             transport,
             credential_overrides=await self.credentials_for_tenant(tenant_id, session),
         )

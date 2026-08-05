@@ -24,3 +24,13 @@ class PersonOut(BaseModel):
     kind: str
     email: str | None
     created_at: datetime
+
+
+class ProviderBindingIn(BaseModel):
+    provider: str
+
+
+class ProviderBindingOut(BaseModel):
+    tenant_id: UUID
+    provider: str | None
+    source: Literal["db", "settings", "default"]
