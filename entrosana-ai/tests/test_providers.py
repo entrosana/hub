@@ -21,7 +21,14 @@ from app.providers.errors import (
 )
 from app.providers.executor import ProviderExecutor
 from app.providers.fake import FakeCashCtrlTransport
-from app.providers.pathfinder import propose_bindings
+from app.providers.pathfinder import (
+    main as pathfinder_main,
+)
+from app.providers.pathfinder import (
+    propose_bindings,
+    register_object_synonyms,
+    render_proposal,
+)
 from app.providers.registry import ProviderRegistry
 from app.providers.spec import SPECS_DIR, ProviderSpec, load_all
 from app.providers.vocabulary import CANONICAL_OPS, validate_args
@@ -451,6 +458,47 @@ def test_pathfinder_proposes_plausible_endpoints():
     assert props["journal.create"][0].method == "POST"
 
 
+def test_pathfinder_handles_synonyms_empty_matches_and_rendering():
+    register_object_synonyms(contact={"person"})
+    props = propose_bindings(
+        {
+            "paths": {
+                "/people/find": {
+                    "get": {
+                        "operationId": "findPerson",
+                        "description": "Find a person",
+                        "parameters": [{"name": "q"}],
+                    }
+                },
+                "/weather": {"patch": {"summary": "unrelated"}},
+            }
+        },
+        ops=["contact.lookup", "journal.create"],
+        top=1,
+    )
+
+    candidate = props["contact.lookup"][0]
+    assert candidate.path == "/people/find"
+    assert candidate.param_names == ["q"]
+    assert props["journal.create"] == []
+    rendered = render_proposal({**props, "journal.list": []})
+    assert "contact.lookup" in rendered
+    assert "journal.list" in rendered
+    assert "no candidate endpoint matched" in rendered
+
+
+def test_pathfinder_cli_rejects_bad_input(tmp_path, capsys):
+    missing = pathfinder_main([str(tmp_path / "missing.json")])
+    assert missing == 2
+    assert "cannot read OpenAPI doc" in capsys.readouterr().err
+
+    document = tmp_path / "openapi.json"
+    document.write_text('{"paths": {}}', encoding="utf-8")
+    unknown = pathfinder_main([str(document), "--op", "not-an-operation"])
+    assert unknown == 2
+    assert "unknown canonical op" in capsys.readouterr().err
+
+
 # ── Grok external-audit round 2 fixes ───────────────────────────────────────
 
 
@@ -695,9 +743,7 @@ async def test_idempotency_key_is_required_and_header_safe():
         await ex.execute("journal.create", args, confirmed=True)
 
     with pytest.raises(ExecutionError, match="control characters"):
-        await ex.execute(
-            "journal.create", args, confirmed=True, idempotency_key="key\r\nX-Evil: 1"
-        )
+        await ex.execute("journal.create", args, confirmed=True, idempotency_key="key\r\nX-Evil: 1")
 
     ok = await ex.execute("journal.create", args, confirmed=True, idempotency_key="key-1")
     assert ok.count == 1
