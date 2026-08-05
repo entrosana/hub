@@ -16,6 +16,7 @@ from pydantic import model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.providers import bindings
 from app.providers.credentials import get_tenant_credentials
 from app.providers.pathfinder import register_object_synonyms
 from app.providers.registry import set_binding_source
@@ -84,9 +85,15 @@ class FallbackBindingSource:
     fallback (`accounting_tenant_credentials` or global provider secrets).
     """
 
-    def provider_for_tenant(self, tenant_id: UUID | str) -> str:
-        bindings = settings.accounting_provider_bindings or {}
-        return bindings.get(str(tenant_id), settings.default_accounting_provider)
+    async def provider_for_tenant(
+        self, tenant_id: UUID | str, session: AsyncSession | None = None
+    ) -> str:
+        if session is not None:
+            db_provider = await bindings.get_tenant_binding(session, tenant_id)
+            if db_provider is not None:
+                return db_provider
+        configured = settings.accounting_provider_bindings or {}
+        return configured.get(str(tenant_id), settings.default_accounting_provider)
 
     async def credentials_for_tenant(
         self, tenant_id: UUID | str, session: AsyncSession | None = None

@@ -1,3 +1,4 @@
+# ruff: noqa: S106
 """Auth layer tests — prove the audit C1/C2 cross-tenant breach is closed.
 
 Covers: unauthenticated access is rejected, tenant is derived from the verified
@@ -19,8 +20,13 @@ pytestmark = pytest.mark.anyio
 
 async def _make_user(db, *, tenant_id, email, password, role="member"):
     u = await service.create_user(
-        db, tenant_id=tenant_id, actor_id="test-setup",
-        name="Test", email=email, password=password, role=role,
+        db,
+        tenant_id=tenant_id,
+        actor_id="test-setup",
+        name="Test",
+        email=email,
+        password=password,
+        role=role,
     )
     await db.commit()
     return u
@@ -78,9 +84,16 @@ async def test_tenant_derived_from_token_not_header(db, client):
 
 async def test_alg_none_token_rejected(client):
     forged = jwt.encode(
-        {"sub": str(uuid.uuid4()), "tid": str(uuid.uuid4()), "role": "admin",
-         "type": "access", "iat": 0, "exp": 9999999999},
-        "", algorithm="none",
+        {
+            "sub": str(uuid.uuid4()),
+            "tid": str(uuid.uuid4()),
+            "role": "admin",
+            "type": "access",
+            "iat": 0,
+            "exp": 9999999999,
+        },
+        "",
+        algorithm="none",
     )
     r = await client.get(f"{PREFIX}/identity/users", headers=_auth(forged))
     assert r.status_code == 401
@@ -88,9 +101,16 @@ async def test_alg_none_token_rejected(client):
 
 async def test_wrong_secret_token_rejected(client):
     forged = jwt.encode(
-        {"sub": str(uuid.uuid4()), "tid": str(uuid.uuid4()), "role": "admin",
-         "type": "access", "iat": 0, "exp": 9999999999},
-        "attacker-guessed-key", algorithm="HS256",
+        {
+            "sub": str(uuid.uuid4()),
+            "tid": str(uuid.uuid4()),
+            "role": "admin",
+            "type": "access",
+            "iat": 0,
+            "exp": 9999999999,
+        },
+        "attacker-guessed-key",
+        algorithm="HS256",
     )
     r = await client.get(f"{PREFIX}/identity/users", headers=_auth(forged))
     assert r.status_code == 401
@@ -105,9 +125,16 @@ async def test_refresh_token_not_accepted_as_access(db, client):
 
 async def test_expired_token_rejected(client):
     expired = jwt.encode(
-        {"sub": str(uuid.uuid4()), "tid": str(uuid.uuid4()), "role": "member",
-         "type": "access", "iat": 0, "exp": 1},
-        settings.secret_key, algorithm=settings.jwt_algorithm,
+        {
+            "sub": str(uuid.uuid4()),
+            "tid": str(uuid.uuid4()),
+            "role": "member",
+            "type": "access",
+            "iat": 0,
+            "exp": 1,
+        },
+        settings.secret_key,
+        algorithm=settings.jwt_algorithm,
     )
     r = await client.get(f"{PREFIX}/identity/users", headers=_auth(expired))
     assert r.status_code == 401
@@ -115,7 +142,9 @@ async def test_expired_token_rejected(client):
 
 async def test_me_returns_principal(db, client):
     t = uuid.uuid4()
-    u = await _make_user(db, tenant_id=t, email="d@example.com", password="password123456", role="admin")
+    u = await _make_user(
+        db, tenant_id=t, email="d@example.com", password="password123456", role="admin"
+    )
     tok = (await _login(client, "d@example.com", "password123456")).json()["access_token"]
     r = await client.get(f"{PREFIX}/auth/me", headers=_auth(tok))
     assert r.status_code == 200
@@ -127,18 +156,30 @@ async def test_me_returns_principal(db, client):
 
 async def test_admin_route_requires_admin_role(db, client):
     t = uuid.uuid4()
-    await _make_user(db, tenant_id=t, email="member@example.com", password="password123456", role="member")
-    await _make_user(db, tenant_id=t, email="boss@example.com", password="password123456", role="admin")
-    member_tok = (await _login(client, "member@example.com", "password123456")).json()["access_token"]
+    await _make_user(
+        db, tenant_id=t, email="member@example.com", password="password123456", role="member"
+    )
+    await _make_user(
+        db, tenant_id=t, email="boss@example.com", password="password123456", role="admin"
+    )
+    member_tok = (await _login(client, "member@example.com", "password123456")).json()[
+        "access_token"
+    ]
     admin_tok = (await _login(client, "boss@example.com", "password123456")).json()["access_token"]
-    assert (await client.get(f"{PREFIX}/admin/persons", headers=_auth(member_tok))).status_code == 403
-    assert (await client.get(f"{PREFIX}/admin/persons", headers=_auth(admin_tok))).status_code == 200
+    assert (
+        await client.get(f"{PREFIX}/admin/persons", headers=_auth(member_tok))
+    ).status_code == 403
+    assert (
+        await client.get(f"{PREFIX}/admin/persons", headers=_auth(admin_tok))
+    ).status_code == 200
 
 
 async def test_refresh_blocks_deactivated_user(db, client):
     """Adversarial finding: a deactivated user must not renew via refresh."""
     t = uuid.uuid4()
-    u = await _make_user(db, tenant_id=t, email="revoke@example.com", password="password123456", role="admin")
+    u = await _make_user(
+        db, tenant_id=t, email="revoke@example.com", password="password123456", role="admin"
+    )
     refresh = (await _login(client, "revoke@example.com", "password123456")).json()["refresh_token"]
     u.is_active = False
     await db.commit()
@@ -149,14 +190,18 @@ async def test_refresh_blocks_deactivated_user(db, client):
 async def test_refresh_reflects_role_revocation(db, client):
     """A demoted admin's refresh yields a member token — no frozen role."""
     t = uuid.uuid4()
-    u = await _make_user(db, tenant_id=t, email="demote@example.com", password="password123456", role="admin")
+    u = await _make_user(
+        db, tenant_id=t, email="demote@example.com", password="password123456", role="admin"
+    )
     refresh = (await _login(client, "demote@example.com", "password123456")).json()["refresh_token"]
     u.role = "member"
     await db.commit()
     r = await client.post(f"{PREFIX}/auth/refresh", json={"refresh_token": refresh})
     assert r.status_code == 200
     new_access = r.json()["access_token"]
-    assert (await client.get(f"{PREFIX}/admin/persons", headers=_auth(new_access))).status_code == 403
+    assert (
+        await client.get(f"{PREFIX}/admin/persons", headers=_auth(new_access))
+    ).status_code == 403
 
 
 async def test_actor_attribution_is_real_user(db, client):
@@ -166,7 +211,9 @@ async def test_actor_attribution_is_real_user(db, client):
     from app.audit.models import AuditEvent
 
     t = uuid.uuid4()
-    caller = await _make_user(db, tenant_id=t, email="caller@example.com", password="password123456")
+    caller = await _make_user(
+        db, tenant_id=t, email="caller@example.com", password="password123456"
+    )
     tok = (await _login(client, "caller@example.com", "password123456")).json()["access_token"]
     r = await client.post(
         f"{PREFIX}/identity/users",
@@ -175,8 +222,10 @@ async def test_actor_attribution_is_real_user(db, client):
     )
     assert r.status_code == 201
     rows = (
-        await db.execute(select(AuditEvent).where(AuditEvent.action == "identity.user.create"))
-    ).scalars().all()
+        (await db.execute(select(AuditEvent).where(AuditEvent.action == "identity.user.create")))
+        .scalars()
+        .all()
+    )
     actors = {e.actor_id for e in rows}
     assert str(caller.id) in actors  # the API create is attributed to the caller
     assert "system" not in actors  # the hardcoded placeholder is gone from the request path

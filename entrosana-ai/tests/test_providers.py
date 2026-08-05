@@ -376,14 +376,14 @@ def test_unknown_provider_raises():
         ProviderRegistry().get("bexio")
 
 
-def test_tenant_resolution_default_and_binding(monkeypatch):
+async def test_tenant_resolution_default_and_binding(monkeypatch):
     from app.core.config import settings
 
     monkeypatch.setattr(settings, "default_accounting_provider", "cashctrl")
     monkeypatch.setattr(settings, "accounting_provider_bindings", {"tenant-x": "bexio"})
     reg = ProviderRegistry()
-    assert reg.provider_for_tenant("tenant-y") == "cashctrl"  # falls back to default
-    assert reg.provider_for_tenant("tenant-x") == "bexio"  # explicit binding
+    assert await reg.provider_for_tenant("tenant-y") == "cashctrl"  # falls back to default
+    assert await reg.provider_for_tenant("tenant-x") == "bexio"  # explicit binding
 
 
 # ── pagination (executor loop, provider-agnostic) ───────────────────────────
@@ -695,9 +695,7 @@ async def test_idempotency_key_is_required_and_header_safe():
         await ex.execute("journal.create", args, confirmed=True)
 
     with pytest.raises(ExecutionError, match="control characters"):
-        await ex.execute(
-            "journal.create", args, confirmed=True, idempotency_key="key\r\nX-Evil: 1"
-        )
+        await ex.execute("journal.create", args, confirmed=True, idempotency_key="key\r\nX-Evil: 1")
 
     ok = await ex.execute("journal.create", args, confirmed=True, idempotency_key="key-1")
     assert ok.count == 1

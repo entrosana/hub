@@ -105,7 +105,7 @@ async def test_binding_source_needs_no_settings(library):
     """A deployment can bind tenants however it likes — settings are one option."""
 
     class InMemoryBinding:
-        def provider_for_tenant(self, tenant_id):
+        async def provider_for_tenant(self, tenant_id, session=None):
             return "libsys"
 
         async def credentials_for_tenant(self, tenant_id, session=None):
@@ -113,8 +113,8 @@ async def test_binding_source_needs_no_settings(library):
 
     assert isinstance(InMemoryBinding(), BindingSource)
     registry = ProviderRegistry(specs={"libsys": library}, binding=InMemoryBinding())
-    assert registry.provider_for_tenant("any-tenant") == "libsys"
-    assert registry.resolve("any-tenant").name == "libsys"
+    assert await registry.provider_for_tenant("any-tenant") == "libsys"
+    assert (await registry.resolve("any-tenant")).name == "libsys"
 
 
 def test_vocabulary_rejects_vendor_names_and_silent_redefinition():
