@@ -44,7 +44,7 @@ test:unit:
   before_script:
     - pip install --quiet -e ".[dev]"
   script:
-    - pytest --cov=app --cov-report=term-missing -v
+    - pytest --cov=app --cov-report=term-missing --cov-fail-under=80 -v
 
 build:docker:
   stage: build
