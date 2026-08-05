@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit import service as audit
 from app.contracts.models import Contract
 from app.core.crud import create_for_tenant
+from app.core.validation import require_non_empty
 
 
 async def draft_contract(
@@ -17,6 +18,8 @@ async def draft_contract(
     title: str,
     template_version: str,
 ) -> Contract:
+    title = require_non_empty(title, "title")
+    template_version = require_non_empty(template_version, "template_version")
     contract = await create_for_tenant(
         db,
         Contract,

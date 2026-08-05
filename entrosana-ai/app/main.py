@@ -2,8 +2,9 @@
 
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.accounting.router import router as accounting_router
 from app.addresses.router import router as addresses_router
@@ -19,6 +20,7 @@ from app.core.exceptions import add_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import CorrelationIdMiddleware
 from app.core.tracing import setup_tracing
+from app.core.validation import ValidationError
 from app.dlm.runner import close_anthropic_client
 from app.documents.router import router as documents_router
 from app.expenses.router import router as expenses_router
@@ -50,6 +52,15 @@ app = FastAPI(
 )
 
 add_exception_handlers(app)
+
+
+@app.exception_handler(ValidationError)
+async def validation_error_handler(_request: Request, exc: ValidationError) -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content={"detail": str(exc), "field": exc.field},
+    )
+
 
 app.add_middleware(
     CORSMiddleware,

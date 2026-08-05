@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import service as audit
 from app.core.crud import create_for_tenant
+from app.core.validation import require_non_empty
 from app.signup.models import Application
 
 
@@ -18,6 +19,9 @@ async def submit_application(
     parent_name: str,
     parent_email: str,
 ) -> Application:
+    student_name = require_non_empty(student_name, "student_name")
+    parent_name = require_non_empty(parent_name, "parent_name")
+    parent_email = require_non_empty(parent_email, "parent_email")
     application = await create_for_tenant(
         db,
         Application,

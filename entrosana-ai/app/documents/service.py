@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import service as audit
 from app.core.crud import create_for_tenant
+from app.core.validation import require_non_empty, require_range
 from app.documents.models import Document
 
 
@@ -21,6 +22,10 @@ async def register_document(
 ) -> Document:
     """Persist a document row. The actual upload to object storage
     happens upstream; this service just records the metadata pointer."""
+    filename = require_non_empty(filename, "filename")
+    mime_type = require_non_empty(mime_type, "mime_type")
+    storage_uri = require_non_empty(storage_uri, "storage_uri")
+    size_bytes = require_range(size_bytes, "size_bytes", min=0, max=2**63 - 1)
     document = await create_for_tenant(
         db,
         Document,
