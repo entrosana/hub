@@ -13,8 +13,10 @@ from __future__ import annotations
 from uuid import UUID
 
 from pydantic import model_validator
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.providers.credentials import get_tenant_credentials
 from app.providers.pathfinder import register_object_synonyms
 from app.providers.registry import set_binding_source
 from app.providers.vocabulary import (
@@ -73,19 +75,28 @@ class JournalCreateArgs(CanonicalArgs):
 # ── tenant → provider binding (settings-backed today, DB-backed later) ────
 
 
-class SettingsBindingSource:
-    """Reads the deployment's accounting bindings from settings.
+class FallbackBindingSource:
+    """Reads the deployment's accounting bindings from settings, with DB credentials.
 
-    The kernel only knows the ``BindingSource`` shape; these three setting names
-    are accounting-specific and therefore live in the domain pack.
+    Provider binding is still settings-backed (explicit DB binding table is a
+    later increment). Per-tenant secrets are looked up from the encrypted DB
+    store first; when a row is missing the executor falls back to the settings
+    fallback (`accounting_tenant_credentials` or global provider secrets).
     """
 
     def provider_for_tenant(self, tenant_id: UUID | str) -> str:
         bindings = settings.accounting_provider_bindings or {}
         return bindings.get(str(tenant_id), settings.default_accounting_provider)
 
-    def credentials_for_tenant(self, tenant_id: UUID | str) -> dict[str, str]:
-        return (settings.accounting_tenant_credentials or {}).get(str(tenant_id), {})
+    async def credentials_for_tenant(
+        self, tenant_id: UUID | str, session: AsyncSession | None = None
+    ) -> dict[str, str]:
+        base = (settings.accounting_tenant_credentials or {}).get(str(tenant_id), {})
+        if session is None:
+            return base
+        db_creds = await get_tenant_credentials(session, tenant_id)
+        # Encrypted DB rows win over settings-backed per-tenant secrets.
+        return {**base, **db_creds}
 
 
 # ── registration (import side effects, executed once) ─────────────────────
@@ -114,4 +125,4 @@ register_object_synonyms(
     },
 )
 
-set_binding_source(SettingsBindingSource())
+set_binding_source(FallbackBindingSource())

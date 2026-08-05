@@ -22,10 +22,11 @@ Two backends:
 
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import dataclass
 from typing import Protocol
+
+from app.dlm.output import parse_tool_call
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,11 +153,5 @@ class ClaudeRouter:
 
 
 def _parse_tool_call(text: str) -> ToolCall:
-    text = text.strip()
-    if text.startswith("```"):
-        text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.DOTALL)
-        text = re.sub(r"\s*```\s*$", "", text, flags=re.DOTALL)
-    obj = json.loads(text)
-    if not isinstance(obj, dict) or "tool" not in obj:
-        raise ValueError(f"LLM did not return a tool-call JSON: {text[:200]!r}")
-    return ToolCall(tool=obj["tool"], args=obj.get("args", {}) or {})
+    envelope = parse_tool_call(text)
+    return ToolCall(tool=envelope.tool, args=envelope.args)

@@ -51,6 +51,35 @@ class AuditChainHead(TenantBase):
     head_hmac: Mapped[str] = mapped_column(String(64), nullable=False)
 
 
+class AuditChainCheckpoint(TenantBase):
+    """Previously verified prefix boundary for a tenant's audit chain."""
+
+    __tablename__ = "audit_chain_checkpoint"
+    __table_args__ = (UniqueConstraint("tenant_id", name="uq_audit_checkpoint_tenant"),)
+
+    seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    hmac: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
+class AuditEventArchive(TenantBase):
+    """Cold storage for audit events covered by a verified checkpoint."""
+
+    __tablename__ = "audit_events_archive"
+    __table_args__ = (UniqueConstraint("tenant_id", "seq", name="uq_audit_archive_tenant_seq"),)
+
+    seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    actor_id: Mapped[str] = mapped_column(String(64))
+    action: Mapped[str] = mapped_column(String(128), index=True)
+    target_type: Mapped[str] = mapped_column(String(64))
+    target_id: Mapped[str] = mapped_column(String(64))
+    before_state: Mapped[dict] = mapped_column(JSON, default=dict)
+    after_state: Mapped[dict] = mapped_column(JSON, default=dict)
+    reasoning: Mapped[str | None] = mapped_column(String, nullable=True)
+    prev_hmac: Mapped[str] = mapped_column(String(64))
+    hmac: Mapped[str] = mapped_column(String(64), index=True)
+    key_id: Mapped[str] = mapped_column(String(32), nullable=False, server_default="k1")
+
+
 class DLMInteraction(TenantBase):
     """One Deterministic-Language-Model call. Replayable, pinned, signed."""
 

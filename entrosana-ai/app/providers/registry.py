@@ -15,6 +15,8 @@ from __future__ import annotations
 from typing import Protocol, runtime_checkable
 from uuid import UUID
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.providers.errors import UnknownProviderError
 from app.providers.executor import ProviderExecutor
 from app.providers.spec import SPECS_DIR, ProviderSpec, load_all
@@ -27,7 +29,9 @@ class BindingSource(Protocol):
 
     def provider_for_tenant(self, tenant_id: UUID | str) -> str: ...
 
-    def credentials_for_tenant(self, tenant_id: UUID | str) -> dict[str, str]: ...
+    async def credentials_for_tenant(
+        self, tenant_id: UUID | str, session: AsyncSession | None = None
+    ) -> dict[str, str]: ...
 
 
 _binding_source: BindingSource | None = None
@@ -82,16 +86,20 @@ class ProviderRegistry:
         bound/default provider has no spec — a config error, surfaced loudly)."""
         return self.get(self.provider_for_tenant(tenant_id))
 
-    def credentials_for_tenant(self, tenant_id: UUID | str) -> dict[str, str]:
+    async def credentials_for_tenant(
+        self, tenant_id: UUID | str, session: AsyncSession | None = None
+    ) -> dict[str, str]:
         """Tenant-scoped secret overrides ({settings_attr: value}); empty dict
         falls back to global settings (single-tenant / dev only — see config)."""
-        return self.__init_binding__().credentials_for_tenant(tenant_id)
+        return await self.__init_binding__().credentials_for_tenant(tenant_id, session)
 
-    def executor_for_tenant(self, tenant_id: UUID | str, transport: Transport) -> ProviderExecutor:
+    async def executor_for_tenant(
+        self, tenant_id: UUID | str, transport: Transport, session: AsyncSession | None = None
+    ) -> ProviderExecutor:
         return ProviderExecutor(
             self.resolve(tenant_id),
             transport,
-            credential_overrides=self.credentials_for_tenant(tenant_id),
+            credential_overrides=await self.credentials_for_tenant(tenant_id, session),
         )
 
 

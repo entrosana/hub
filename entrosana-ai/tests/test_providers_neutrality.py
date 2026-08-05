@@ -108,7 +108,7 @@ async def test_binding_source_needs_no_settings(library):
         def provider_for_tenant(self, tenant_id):
             return "libsys"
 
-        def credentials_for_tenant(self, tenant_id):
+        async def credentials_for_tenant(self, tenant_id, session=None):
             return {}
 
     assert isinstance(InMemoryBinding(), BindingSource)

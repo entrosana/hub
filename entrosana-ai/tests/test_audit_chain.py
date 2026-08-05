@@ -11,7 +11,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.audit import service as audit
-from app.audit.models import AuditEvent
+from app.audit.models import AuditEvent, AuditEventArchive
+from app.identity import service as identity_service
 
 
 async def _record_n(db, tenant, n):
@@ -19,8 +20,13 @@ async def _record_n(db, tenant, n):
     for i in range(n):
         events.append(
             await audit.record(
-                db, tenant_id=tenant, actor_id="a", action="test.event",
-                target_type="thing", target_id=str(i), after={"i": i},
+                db,
+                tenant_id=tenant,
+                actor_id="a",
+                action="test.event",
+                target_type="thing",
+                target_id=str(i),
+                after={"i": i},
             )
         )
     await db.flush()
@@ -122,7 +128,10 @@ async def test_tail_truncation_detected(db):
 
     last = (
         await db.execute(
-            select(AuditEvent).where(AuditEvent.tenant_id == tenant).order_by(AuditEvent.seq.desc()).limit(1)
+            select(AuditEvent)
+            .where(AuditEvent.tenant_id == tenant)
+            .order_by(AuditEvent.seq.desc())
+            .limit(1)
         )
     ).scalar_one()
     await db.delete(last)
@@ -149,9 +158,17 @@ async def test_unique_seq_prevents_fork(db):
     tenant = uuid4()
     await _record_n(db, tenant, 1)
     dup = AuditEvent(
-        tenant_id=tenant, seq=1, actor_id="x", action="e", target_type="t",
-        target_id="dup", before_state={}, after_state={},
-        prev_hmac=audit.GENESIS, hmac="0" * 16, key_id="k1",
+        tenant_id=tenant,
+        seq=1,
+        actor_id="x",
+        action="e",
+        target_type="t",
+        target_id="dup",
+        before_state={},
+        after_state={},
+        prev_hmac=audit.GENESIS,
+        hmac="0" * 16,
+        key_id="k1",
     )
     db.add(dup)
     with pytest.raises(IntegrityError):
@@ -178,14 +195,185 @@ async def test_key_rotation_keeps_old_rows_verifiable(db, monkeypatch):
 
     monkeypatch.setattr(audit, "_current_key", lambda: ("old", old))
     monkeypatch.setattr(audit, "_keyring", lambda: {"old": old})
-    await audit.record(db, tenant_id=tenant, actor_id="a", action="e", target_type="t", target_id="1")
+    await audit.record(
+        db, tenant_id=tenant, actor_id="a", action="e", target_type="t", target_id="1"
+    )
     await db.flush()
 
     # rotate: sign new rows with "new", but keep "old" in the keyring
     monkeypatch.setattr(audit, "_current_key", lambda: ("new", new))
     monkeypatch.setattr(audit, "_keyring", lambda: {"new": new, "old": old})
-    await audit.record(db, tenant_id=tenant, actor_id="a", action="e", target_type="t", target_id="2")
+    await audit.record(
+        db, tenant_id=tenant, actor_id="a", action="e", target_type="t", target_id="2"
+    )
     await db.flush()
 
     ok, n, _ = await audit.verify_chain(db, tenant)
     assert ok is True and n == 2
+
+
+async def test_checkpoint_fast_and_full_verification_match(db):
+    tenant = uuid4()
+    await _record_n(db, tenant, 3)
+
+    checkpoint_seq = await audit.checkpoint_chain(db, tenant)
+
+    assert checkpoint_seq == 3
+    assert (await audit.verify_chain(db, tenant)) == (True, 3, None)
+    assert (await audit.verify_chain(db, tenant, full=True)) == (True, 3, None)
+
+
+async def test_archive_checkpointed_preserves_verification_and_count(db):
+    tenant = uuid4()
+    await _record_n(db, tenant, 4)
+    await audit.checkpoint_chain(db, tenant)
+
+    archived = await audit.archive_checkpointed(db, tenant)
+    await db.flush()
+
+    hot = (
+        (await db.execute(select(AuditEvent).where(AuditEvent.tenant_id == tenant))).scalars().all()
+    )
+    cold = (
+        (await db.execute(select(AuditEventArchive).where(AuditEventArchive.tenant_id == tenant)))
+        .scalars()
+        .all()
+    )
+    assert archived == 4
+    assert hot == []
+    assert [event.seq for event in cold] == [1, 2, 3, 4]
+    assert (await audit.verify_chain(db, tenant)) == (True, 4, None)
+    assert (await audit.verify_chain(db, tenant, full=True)) == (True, 4, None)
+
+
+async def test_fast_path_trusts_checkpoint_but_full_detects_archived_tampering(db):
+    tenant = uuid4()
+    await _record_n(db, tenant, 3)
+    await audit.checkpoint_chain(db, tenant)
+    await audit.archive_checkpointed(db, tenant)
+
+    archived = (
+        await db.execute(
+            select(AuditEventArchive).where(
+                AuditEventArchive.tenant_id == tenant,
+                AuditEventArchive.seq == 2,
+            )
+        )
+    ).scalar_one()
+    archived.hmac = "deadbeef" * 8
+    await db.flush()
+
+    assert (await audit.verify_chain(db, tenant)) == (True, 3, None)
+    ok, n, first_bad = await audit.verify_chain(db, tenant, full=True)
+    assert ok is False
+    assert n == 3
+    assert first_bad == archived.id
+
+
+async def test_fast_path_detects_hot_tampering_after_checkpoint(db):
+    tenant = uuid4()
+    await _record_n(db, tenant, 3)
+    await audit.checkpoint_chain(db, tenant)
+    event = await audit.record(
+        db,
+        tenant_id=tenant,
+        actor_id="a",
+        action="after.checkpoint",
+        target_type="thing",
+        target_id="4",
+    )
+    event.hmac = "deadbeef" * 8
+    await db.flush()
+
+    ok, n, first_bad = await audit.verify_chain(db, tenant)
+    assert ok is False
+    assert n == 4
+    assert first_bad == event.id
+
+
+async def test_fast_path_detects_tail_truncation_after_checkpoint(db):
+    tenant = uuid4()
+    await _record_n(db, tenant, 3)
+    await audit.checkpoint_chain(db, tenant)
+    event = await audit.record(
+        db,
+        tenant_id=tenant,
+        actor_id="a",
+        action="after.checkpoint",
+        target_type="thing",
+        target_id="4",
+    )
+    await db.delete(event)
+    await db.flush()
+
+    ok, n, first_bad = await audit.verify_chain(db, tenant)
+    assert ok is False
+    assert n == 3
+    assert first_bad is None
+
+
+async def test_fast_path_detects_gap_after_checkpoint(db):
+    tenant = uuid4()
+    await _record_n(db, tenant, 3)
+    await audit.checkpoint_chain(db, tenant)
+    first = await audit.record(
+        db,
+        tenant_id=tenant,
+        actor_id="a",
+        action="after.checkpoint",
+        target_type="thing",
+        target_id="4",
+    )
+    second = await audit.record(
+        db,
+        tenant_id=tenant,
+        actor_id="a",
+        action="after.checkpoint",
+        target_type="thing",
+        target_id="5",
+    )
+    await db.delete(first)
+    await db.flush()
+
+    ok, n, first_bad = await audit.verify_chain(db, tenant)
+    assert ok is False
+    assert n == 4
+    assert first_bad == second.id
+
+
+async def test_audit_events_cursor_pagination(db, client):
+    tenant = uuid4()
+    email = f"{uuid4()}@example.com"
+    password = uuid4().hex
+    await identity_service.create_user(
+        db,
+        tenant_id=tenant,
+        actor_id="setup",
+        name="Auditor",
+        email=email,
+        password=password,
+    )
+    await db.commit()
+    token = (
+        await client.post(
+            "/api/v1/auth/login",
+            json={"email": email, "password": password},
+        )
+    ).json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    await _record_n(db, tenant, 5)
+    await db.commit()
+
+    first_page = await client.get(
+        "/api/v1/audit/events",
+        params={"limit": 2},
+        headers=headers,
+    )
+    second_page = await client.get(
+        "/api/v1/audit/events",
+        params={"limit": 2, "before_seq": 6},
+        headers=headers,
+    )
+    assert [event["target_id"] for event in first_page.json()] == ["4", "3"]
+    assert [event["target_id"] for event in second_page.json()] == ["3", "2"]

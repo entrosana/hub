@@ -16,14 +16,18 @@ from app.billing.router import router as billing_router
 from app.contracts.router import router as contracts_router
 from app.core.auth import get_current_principal, require_role
 from app.core.config import settings
+from app.core.exceptions import add_exception_handlers
 from app.core.logging import configure_logging
+from app.core.middleware import CorrelationIdMiddleware
 from app.core.tracing import setup_tracing
 from app.core.validation import ValidationError
+from app.dlm.runner import close_anthropic_client
 from app.documents.router import router as documents_router
 from app.expenses.router import router as expenses_router
 
 # Routers (each module owns one)
 from app.identity.router import router as identity_router
+from app.providers.transport import close_http_client
 from app.scheduling.router import router as scheduling_router
 from app.signup.router import router as signup_router
 from app.taxes.router import router as taxes_router
@@ -34,6 +38,8 @@ async def lifespan(app: FastAPI):
     configure_logging()
     setup_tracing(app)
     yield
+    await close_http_client()
+    await close_anthropic_client()
 
 
 app = FastAPI(
@@ -44,6 +50,8 @@ app = FastAPI(
     redoc_url=None,
     lifespan=lifespan,
 )
+
+add_exception_handlers(app)
 
 
 @app.exception_handler(ValidationError)
@@ -61,6 +69,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(CorrelationIdMiddleware)
 
 
 @app.get("/health", tags=["meta"])
